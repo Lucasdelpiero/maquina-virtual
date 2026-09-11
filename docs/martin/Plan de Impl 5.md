@@ -34,6 +34,10 @@ _Fundamentos de la Arquitectura de Computadoras — UNMDP — MV1 2026_
   - [8.1 Organización de la suite de tests](#81-organización-de-la-suite-de-tests)
   - [8.2 Casos de prueba prioritarios](#82-casos-de-prueba-prioritarios)
 - [9. Roadmap de implementación](#9-roadmap-de-implementación)
+- [10. Código de referencia y patrones de implementación](#10-código-de-referencia-y-patrones-de-implementación)
+  - [10.1 Resolución de operandos y direccionamiento de memoria](#101-resolución-de-operandos-y-direccionamiento-de-memoria)
+  - [10.2 Patrón de operadores y firma uniforme](#102-patrón-de-operadores-y-firma-uniforme)
+  - [10.3 Tabla de despacho y ciclo de ejecución](#103-tabla-de-despacho-y-ciclo-de-ejecución)
 
 ---
 
@@ -507,3 +511,154 @@ Ante cualquiera de las siguientes fallas, la máquina virtual emite un mensaje d
 ### Etapa 8 — Suite de Pruebas Automatizadas y Validación
 - Compilar y ejecutar `tests_runner`.
 - Validar programas de ejemplo completos (ej.: programa de conteo de bits en 1).
+
+---
+
+## 10. Código de referencia y patrones de implementación
+
+Esta sección recopila los patrones de código consolidados como guía de estilo para el equipo, adaptados a las convenciones y nomenclatura del Plan 5 (`vmx`, `camelCase`, constantes estándar y extensión de signo explícita).
+
+### 10.1 Resolución de operandos y direccionamiento de memoria
+
+En la máquina virtual, un operando de tipo memoria no es una dirección plana, sino un campo compuesto por:
+```text
+[16 bits offset (-32768..32767)][3 bits reservados][5 bits código de registro base]
+```
+Por ello, `resolverDireccionMemoria` extrae el registro base, extiende el signo del offset y traduce la dirección lógica a física:
+
+```c
+// Extrae los 8 bits superiores (código de tipo de operando)
+uint8_t obtenerTipo(int32_t operando) {
+    return (uint8_t)((operando >> 24) & 0xFF);
+}
+
+// Extrae los 24 bits inferiores (datos crudos)
+int32_t obtenerDato(int32_t operando) {
+    return operando & 0x00FFFFFF;
+}
+
+// Resuelve un operando de tipo memoria combinando registro base + offset
+uint16_t resolverDireccionMemoria(Vmx *vmx, int32_t dato) {
+    uint8_t codReg = dato & 0x1F;                                   // 5 bits menos significativos
+    uint16_t offsetCrudo = (dato >> 8) & 0xFFFF;                    // 16 bits de offset
+    int32_t offset = extenderSigno16a32(offsetCrudo);               // Extensión de signo manual
+    int32_t dirBase = vmx->registros[codReg];                       // Puntero lógico base del registro
+
+    // Combina y traduce a dirección física (LAR / MAR / tablaSegmentos)
+    return traducirDireccion(vmx, dirBase + offset, 4);
+}
+
+// Obtiene el valor numérico de 32 bits a partir de tipo y dato
+int32_t obtenerValor(Vmx *vmx, uint8_t tipo, int32_t dato) {
+    if (tipo == TIPO_REGISTRO) {
+        return vmx->registros[dato];
+    }
+    if (tipo == TIPO_INMEDIATO) {
+        return extenderSigno16a32((uint16_t)dato);
+    }
+    if (tipo == TIPO_MEMORIA) {
+        uint16_t posFisica = resolverDireccionMemoria(vmx, dato);
+        return leerMemoria(vmx, posFisica, 4);
+    }
+    vmx->abortar(vmx, "Tipo de operando inválido al leer valor");
+    return 0;
+}
+
+// Guarda un resultado de 32 bits en el destino (registro o memoria)
+void guardarResultado(Vmx *vmx, uint8_t tipo, int32_t dato, int32_t valor) {
+    if (tipo == TIPO_REGISTRO) {
+        vmx->registros[dato] = valor;
+    } else if (tipo == TIPO_MEMORIA) {
+        uint16_t posFisica = resolverDireccionMemoria(vmx, dato);
+        escribirMemoria(vmx, posFisica, 4, valor);
+    } else {
+        vmx->abortar(vmx, "Error: intento de escribir en operando inmediato");
+    }
+}
+```
+
+### 10.2 Patrón de operadores y firma uniforme
+
+Todas las 26 operaciones implementan la misma firma `void (*FuncionOperacion)(Vmx *vmx)`. Esto es posible porque **todas leen sus operandos desde `vmx->registros[OP1]` y `vmx->registros[OP2]`**, los cuales fueron previamente cargados por el decodificador:
+
+```c
+typedef void (*FuncionOperacion)(Vmx *vmx);
+
+// Ejemplo: Operador de 2 operandos que guarda resultado y actualiza CC (ADD)
+void opAdd(Vmx *vmx) {
+    uint8_t tipoA = obtenerTipo(vmx->registros[OP1]);
+    int32_t datoA = obtenerDato(vmx->registros[OP1]);
+    uint8_t tipoB = obtenerTipo(vmx->registros[OP2]);
+    int32_t datoB = obtenerDato(vmx->registros[OP2]);
+
+    int32_t a = obtenerValor(vmx, tipoA, datoA);
+    int32_t b = obtenerValor(vmx, tipoB, datoB);
+    int32_t res = a + b;
+
+    actualizarCC(vmx, res, a, b, OP_ADD);
+    guardarResultado(vmx, tipoA, datoA, res);
+}
+
+// Ejemplo: Operador de 2 operandos que solo compara y afecta CC sin modificar destino (CMP)
+void opCmp(Vmx *vmx) {
+    uint8_t tipoA = obtenerTipo(vmx->registros[OP1]);
+    int32_t datoA = obtenerDato(vmx->registros[OP1]);
+    uint8_t tipoB = obtenerTipo(vmx->registros[OP2]);
+    int32_t datoB = obtenerDato(vmx->registros[OP2]);
+
+    int32_t a = obtenerValor(vmx, tipoA, datoA);
+    int32_t b = obtenerValor(vmx, tipoB, datoB);
+
+    actualizarCC(vmx, a - b, a, b, OP_CMP);
+}
+
+// Ejemplo: Operador de 1 operando que afecta CC (NOT)
+void opNot(Vmx *vmx) {
+    uint8_t tipoA = obtenerTipo(vmx->registros[OP1]);
+    int32_t datoA = obtenerDato(vmx->registros[OP1]);
+
+    int32_t a = obtenerValor(vmx, tipoA, datoA);
+    int32_t res = ~a;
+
+    actualizarCC(vmx, res, a, 0, OP_NOT);
+    guardarResultado(vmx, tipoA, datoA, res);
+}
+
+// Ejemplo: Operador sin operandos (STOP)
+void opStop(Vmx *vmx) {
+    vmx->registros[IP] = -1; // Detiene el ciclo de ejecución
+}
+```
+
+### 10.3 Tabla de despacho y ciclo de ejecución
+
+En el módulo inicializador se pobla la tabla de punteros a función:
+
+```c
+FuncionOperacion tablaOperaciones[32] = {NULL};
+
+void inicializarTablaOperaciones(void) {
+    tablaOperaciones[OP_MOV]  = opMov;
+    tablaOperaciones[OP_ADD]  = opAdd;
+    tablaOperaciones[OP_SUB]  = opSub;
+    tablaOperaciones[OP_CMP]  = opCmp;
+    tablaOperaciones[OP_NOT]  = opNot;
+    tablaOperaciones[OP_STOP] = opStop;
+    // ... resto de las 26 operaciones
+}
+```
+
+En el ciclo principal de ejecución (`vmx.c`):
+
+```c
+void ejecutarInstruccion(Vmx *vmx) {
+    uint8_t opc = (uint8_t)vmx->registros[OPC];
+    if (opc >= 32 || tablaOperaciones[opc] == NULL) {
+        vmx->abortar(vmx, "Instrucción inválida o código de operación inexistente");
+        return;
+    }
+    // Despacho directo sin switch
+    tablaOperaciones[opc](vmx);
+}
+```
+
