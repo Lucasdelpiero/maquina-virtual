@@ -207,7 +207,7 @@ FuncionOperacion tablaOperaciones[32]; // Inicializada en NULL
 ```
 
 - Despacho directo: `FuncionOperacion op = tablaOperaciones[vmx->registros[OPC]];`
-- Si `op == NULL`, se trata de una instrucción inválida y se invoca inmediatamente `vmx->abortar(vmx, "Instrucción inválida");`.
+- Si `op == NULL`, se trata de una instrucción inválida y se invoca inmediatamente `vmx->abortar("Instrucción inválida");`.
 
 ### 5.3 Memoria principal y tabla de segmentos
 
@@ -235,31 +235,70 @@ struct Vmx {
     int modoDebug;        // Flag para trazas de depuración (-dev)
     int modoDisassembler; // Flag para ejecución con disassembler (-d)
 
-    // Punteros a funciones de utilidad
-    void (*logger)(Vmx *vmx, const char *mensaje);
-    void (*abortar)(Vmx *vmx, const char *mensaje);
+    // Puntero a función para abortar ante errores fatales
+    void (*abortar)(const char *mensaje);
 };
 ```
 
-> **Nota sobre includes**: El struct `Vmx` no necesita incluir `logger.h` ni `errores.h`. Solo declara los punteros a función con la firma genérica `(Vmx *vmx, const char *mensaje)`. Quien sí incluye `logger.h` y `errores.h` es `inicializador.c` para enlazar los punteros con sus implementaciones reales.
+### 6.2 Módulo Logger (`logger.h` / `logger.c`) [Pendiente a confirmar]
+Módulo utilitario independiente para emisión condicional de trazas de desarrollo y depuración (on/off estilo `printf`), configurable mediante argumento por consola (`-v` o `-dev`):
 
-### 6.2 Módulo Logger (`logger.h` / `logger.c`)
-Módulo dedicado exclusivamente a la emisión de trazas de desarrollo y depuración:
-- `logMsg(Vmx *vmx, const char *mensaje)`: imprime el mensaje por consola con prefijo `[LOG]` únicamente si `vmx->modoDebug == 1`. Si el flag está en 0, no produce salida.
+#### Código propuesto:
+**`src/logger.h`**:
+```c
+#ifndef LOGGER_H
+#define LOGGER_H
+
+// Habilita o deshabilita los prints (1 = activado, 0 = desactivado)
+void loggerHabilitar(int habilitar);
+
+// Imprime únicamente si el logger está habilitado. Funciona igual que printf.
+void logMsg(const char *formato, ...);
+
+#endif
+```
+
+**`src/logger.c`**:
+```c
+#include "logger.h"
+#include <stdio.h>
+#include <stdarg.h>
+
+static int s_habilitado = 0; // Desactivado por defecto
+
+void loggerHabilitar(int habilitar) {
+    s_habilitado = habilitar;
+}
+
+void logMsg(const char *formato, ...) {
+    if (!s_habilitado) return;
+
+    va_list args;
+    va_start(args, formato);
+    vprintf(formato, args);
+    va_end(args);
+}
+```
+
+#### Explicación técnica del mecanismo de argumentos variables (`<stdarg.h>`):
+- **`va_list args;`**: Declara una variable especial de tipo lista/puntero que utiliza el compilador para rastrear y acceder a los argumentos variables adicionales pasados a la función después del parámetro fijo (`formato`).
+- **`va_start(args, formato);`**: Macro obligatoria que inicializa `args`, posicionándolo exactamente en el primer argumento variable que sigue inmediatamente al parámetro fijo `formato` en la pila de llamadas.
+- **`vprintf(formato, args);`**: Versión interna de `printf` diseñada para consumir la lista `args`. Lee e interpreta los especificadores de formato (`%d`, `%s`, `%x`, etc.) dentro de la cadena `formato`, extrayendo los valores correspondientes de `args` y mostrándolos en la salida estándar (`stdout`).
+- **`va_end(args);`**: Macro obligatoria de limpieza y cierre que restablece el estado de `args` al finalizar. Garantiza la portabilidad entre arquitecturas y evita estados inconsistentes en la pila antes de salir de la función.
 
 ### 6.3 Módulo Manejo de Errores y Abortar (`errores.h` / `errores.c`)
 Módulo dedicado al control de fallos fatales e interrupción inmediata del proceso:
-- `abortar(Vmx *vmx, const char *mensaje)`: imprime el mensaje de error por salida estándar de error / consola y finaliza la ejecución inmediatamente mediante `exit(EXIT_FAILURE)`.
+- `abortar(const char *mensaje)`: imprime el mensaje de error por salida estándar de error (`stderr`) y finaliza la ejecución inmediatamente mediante `exit(EXIT_FAILURE)`.
 
 ### 6.4 Módulo Inicializador (`inicializador.h` / `inicializador.c`)
 Separa claramente la inicialización del sistema en dos fases bien definidas:
 1. **Inicialización intrínseca de la máquina (`inicializarVmx`)**:
    - Limpia en cero registros, memoria y tabla de descriptores.
-   - Enlaza `vmx->logger = logMsg;` y `vmx->abortar = abortar;`.
+   - Enlaza `vmx->abortar = abortar;`.
    - Inicializa las entradas 2 a 7 de la tabla de descriptores en `0xFFFFFFFF`.
    - Inicializa el array `tablaOperaciones` con los punteros a cada función de operación.
 2. **Carga y configuración del programa (`cargarPrograma`)**:
-   - Abre el archivo binario con `fopen(rutaArchivo, "rb")`. Si falla, invoca `vmx->abortar(vmx, "No se pudo abrir el archivo .vmx");`.
+   - Abre el archivo binario con `fopen(rutaArchivo, "rb")`. Si falla, invoca `vmx->abortar("No se pudo abrir el archivo .vmx");`.
    - Lee los 8 bytes de cabecera de una sola vez con `fread(cabecera, 1, 8, archivo)`.
    - Valida el identificador (bytes 0-4: `"VMX26"`) y la versión (byte 5: `1`). Si no coinciden, aborta.
    - Extrae el tamaño del código combinando los bytes 6 y 7 en formato big-endian:
@@ -324,24 +363,24 @@ Decodifica la instrucción apuntada por `IP` dentro del segmento de código sin 
 
 ### 6.7 Módulo Operandos (`operandos.h` / `operandos.c`)
 Encapsula la extracción y resolución de operandos:
-- `obtenerTipo(int32_t operando)`: retorna `(operando >> 24) & 0xFF`.
-- `obtenerDato(int32_t operando)`: retorna el valor de 24 bits con su correspondiente signo.
+- `getTipo(int32_t operando)`: retorna `(operando >> 24) & 0xFF`.
+- `getDato(int32_t operando)`: retorna los 24 bits inferiores (`operando & 0x00FFFFFF`).
 - `resolverDireccionMemoria(Vmx *vmx, int32_t dato)`:
   - `codReg = dato & 0x1F`.
   - `uint16_t offsetCrudo = (dato >> 8) & 0xFFFF`.
   - `int32_t offset = extenderSigno16a32(offsetCrudo)`.
   - Toma el registro base `vmx->registros[codReg]`.
   - Invoca `traducirDireccion(vmx, base + offset, 4)`.
-- `obtenerValor(Vmx *vmx, uint8_t tipo, int32_t dato)`:
+- `getValor(Vmx *vmx, uint8_t tipo, int32_t dato)`:
   - Si es registro: `vmx->registros[dato]`.
-  - Si es inmediato: `dato`.
+  - Si es inmediato: `extenderSigno16a32((uint16_t)dato)`.
   - Si es memoria: `leerMemoria(vmx, posFisica, 4)`.
-- `guardarResultado(Vmx *vmx, uint8_t tipo, int32_t dato, int32_t valor)`:
+- `setValor(Vmx *vmx, uint8_t tipo, int32_t dato, int32_t valor)`:
   - Si es registro: `vmx->registros[dato] = valor`.
   - Si es memoria: `escribirMemoria(vmx, posFisica, 4, valor)`.
-  - Si es inmediato: `vmx->abortar(vmx, "Error: intento de escribir en operando inmediato");`.
+  - Si es inmediato: `vmx->abortar("Error: intento de escribir en operando inmediato");`.
 - `combinarMitad(Vmx *vmx, uint8_t tipo, int32_t dato, uint16_t mitadNueva, int cargarAlta)`:
-  - Función especial para `LDH` y `LDL`. Realiza un ciclo *read-modify-write*: lee los 32 bits actuales mediante `obtenerValor`, combina los 16 bits nuevos en la parte alta o baja preservando los otros 16 bits, y guarda los 32 bits completos mediante `guardarResultado`.
+  - Función especial para `LDH` y `LDL`. Realiza un ciclo *read-modify-write*: lee los 32 bits actuales mediante `getValor`, combina los 16 bits nuevos en la parte alta o baja preservando los otros 16 bits, y guarda los 32 bits completos mediante `setValor`.
 
 ### 6.8 Módulo Operadores y Código de Condición (`operadores.h` / `operadores.c`)
 Cada operador implementa la firma uniforme `void op(Vmx *vmx)`:
@@ -350,8 +389,21 @@ Cada operador implementa la firma uniforme `void op(Vmx *vmx)`:
 El registro `CC` se organiza según la especificación: `[N][Z][C][V][28 bits reservados]`.
 - **N (Bit 31)**: 1 si el resultado de 32 bits con signo es menor a 0.
 - **Z (Bit 30)**: 1 si el resultado de 32 bits es igual a 0.
-- **C (Bit 29)**: Bit de acarreo / carry.
+- **C (Bit 29)**: Bit de acarreo / carry sin signo.
 - **V (Bit 28)**: Bit de desbordamiento / overflow con signo.
+
+Firma e implementación centralizada:
+```c
+void actualizarCC(Vmx *vmx, int32_t resultado, uint8_t carry, uint8_t overflow) {
+    uint32_t n = ((uint32_t)resultado >> 31) & 1; // Bit 31 (signo)
+    uint32_t z = (resultado == 0) ? 1 : 0;        // 1 si es cero
+    uint32_t c = carry ? 1 : 0;                   // Bit 29 (acarreo)
+    uint32_t v = overflow ? 1 : 0;                // Bit 28 (desborde)
+
+    // Empaqueta flags en los 4 bits más significativos; bits 0..27 en 0
+    vmx->registros[CC] = (n << 31) | (z << 30) | (c << 29) | (v << 28);
+}
+```
 
 #### Reglas de operaciones sobre flags:
 1. **Operaciones que modifican CC (13 operaciones taxativas)**:
@@ -383,7 +435,7 @@ El registro `CC` se organiza según la especificación: `[N][Z][C][V][28 bits re
        uint64_t prodSinSigno = (uint64_t)(uint32_t)a * (uint64_t)(uint32_t)b;
        int flagC = (prodSinSigno > UINT32_MAX);
        ```
-     - Para `DIV`: Guarda el cociente en el destino y el resto en `AC`. **`DIV` siempre pone `C=0` y `V=0`** (matemáticamente el cociente de enteros nunca excede al dividendo). Si el divisor es 0, invoca `vmx->abortar(vmx, "Error: División por cero");`.
+     - Para `DIV`: Guarda el cociente en el destino y el resto en `AC`. **`DIV` siempre pone `C=0` y `V=0`** (matemáticamente el cociente de enteros nunca excede al dividendo). Si el divisor es 0, invoca `vmx->abortar("Error: División por cero");`.
      - Para `SHL`: Se corre a la izquierda. Si se "cae" un bit 1 fuera de los 32 bits, se activa `C=1`. `V=1` si el bit de signo cambia.
      - Para `SHR` / `SAR`: Si el último bit expulsado hacia la derecha es 1, se activa `C=1`.
      - Para `AND`, `OR`, `XOR`, `NOT`: Actualizan `N` y `Z`; `C=0` y `V=0`.
@@ -494,7 +546,7 @@ Ante cualquiera de las siguientes fallas, la máquina virtual emite un mensaje d
 - Empaquetar en `OPC`, `OP1`, `OP2` y avanzar `IP`.
 
 ### Etapa 5 — Operandos y Operadores Centrales
-- Implementar `operandos.c` (`obtenerTipo`, `obtenerDato`, `obtenerValor`, `guardarResultado`, `combinarMitad`).
+- Implementar `operandos.c` (`getTipo`, `getDato`, `getValor`, `setValor`, `combinarMitad`).
 - Implementar `actualizarCC` con cálculo de 64 bits para carry y overflow.
 - Implementar los 16 operadores de dos operandos (incluyendo `LDH`, `LDL`, `SWAP`, `DIV` con `AC`).
 - Implementar operadores de un operando (`NOT`, `JMP`, familia `Jcc`, `SYS`) y `STOP`.
@@ -528,12 +580,12 @@ Por ello, `resolverDireccionMemoria` extrae el registro base, extiende el signo 
 
 ```c
 // Extrae los 8 bits superiores (código de tipo de operando)
-uint8_t obtenerTipo(int32_t operando) {
+uint8_t getTipo(int32_t operando) {
     return (uint8_t)((operando >> 24) & 0xFF);
 }
 
 // Extrae los 24 bits inferiores (datos crudos)
-int32_t obtenerDato(int32_t operando) {
+int32_t getDato(int32_t operando) {
     return operando & 0x00FFFFFF;
 }
 
@@ -549,7 +601,7 @@ uint16_t resolverDireccionMemoria(Vmx *vmx, int32_t dato) {
 }
 
 // Obtiene el valor numérico de 32 bits a partir de tipo y dato
-int32_t obtenerValor(Vmx *vmx, uint8_t tipo, int32_t dato) {
+int32_t getValor(Vmx *vmx, uint8_t tipo, int32_t dato) {
     if (tipo == TIPO_REGISTRO) {
         return vmx->registros[dato];
     }
@@ -560,19 +612,19 @@ int32_t obtenerValor(Vmx *vmx, uint8_t tipo, int32_t dato) {
         uint16_t posFisica = resolverDireccionMemoria(vmx, dato);
         return leerMemoria(vmx, posFisica, 4);
     }
-    vmx->abortar(vmx, "Tipo de operando inválido al leer valor");
+    vmx->abortar("Tipo de operando inválido al leer valor");
     return 0;
 }
 
 // Guarda un resultado de 32 bits en el destino (registro o memoria)
-void guardarResultado(Vmx *vmx, uint8_t tipo, int32_t dato, int32_t valor) {
+void setValor(Vmx *vmx, uint8_t tipo, int32_t dato, int32_t valor) {
     if (tipo == TIPO_REGISTRO) {
         vmx->registros[dato] = valor;
     } else if (tipo == TIPO_MEMORIA) {
         uint16_t posFisica = resolverDireccionMemoria(vmx, dato);
         escribirMemoria(vmx, posFisica, 4, valor);
     } else {
-        vmx->abortar(vmx, "Error: intento de escribir en operando inmediato");
+        vmx->abortar("Error: intento de escribir en operando inmediato");
     }
 }
 ```
@@ -586,42 +638,55 @@ typedef void (*FuncionOperacion)(Vmx *vmx);
 
 // Ejemplo: Operador de 2 operandos que guarda resultado y actualiza CC (ADD)
 void opAdd(Vmx *vmx) {
-    uint8_t tipoA = obtenerTipo(vmx->registros[OP1]);
-    int32_t datoA = obtenerDato(vmx->registros[OP1]);
-    uint8_t tipoB = obtenerTipo(vmx->registros[OP2]);
-    int32_t datoB = obtenerDato(vmx->registros[OP2]);
+    uint8_t tipoA = getTipo(vmx->registros[OP1]);
+    int32_t datoA = getDato(vmx->registros[OP1]);
+    uint8_t tipoB = getTipo(vmx->registros[OP2]);
+    int32_t datoB = getDato(vmx->registros[OP2]);
 
-    int32_t a = obtenerValor(vmx, tipoA, datoA);
-    int32_t b = obtenerValor(vmx, tipoB, datoB);
+    int32_t a = getValor(vmx, tipoA, datoA);
+    int32_t b = getValor(vmx, tipoB, datoB);
     int32_t res = a + b;
 
-    actualizarCC(vmx, res, a, b, OP_ADD);
-    guardarResultado(vmx, tipoA, datoA, res);
+    // Acarreo sin signo (Carry): si la suma de 64 bits supera UINT32_MAX
+    uint64_t sumaSinSigno = (uint64_t)(uint32_t)a + (uint64_t)(uint32_t)b;
+    uint8_t flagC = (sumaSinSigno > UINT32_MAX);
+
+    // Desborde con signo (Overflow): si el resultado con signo se sale del rango INT32
+    int64_t sumaConSigno = (int64_t)a + (int64_t)b;
+    uint8_t flagV = (sumaConSigno < INT32_MIN || sumaConSigno > INT32_MAX);
+
+    actualizarCC(vmx, res, flagC, flagV);
+    setValor(vmx, tipoA, datoA, res);
 }
 
 // Ejemplo: Operador de 2 operandos que solo compara y afecta CC sin modificar destino (CMP)
 void opCmp(Vmx *vmx) {
-    uint8_t tipoA = obtenerTipo(vmx->registros[OP1]);
-    int32_t datoA = obtenerDato(vmx->registros[OP1]);
-    uint8_t tipoB = obtenerTipo(vmx->registros[OP2]);
-    int32_t datoB = obtenerDato(vmx->registros[OP2]);
+    uint8_t tipoA = getTipo(vmx->registros[OP1]);
+    int32_t datoA = getDato(vmx->registros[OP1]);
+    uint8_t tipoB = getTipo(vmx->registros[OP2]);
+    int32_t datoB = getDato(vmx->registros[OP2]);
 
-    int32_t a = obtenerValor(vmx, tipoA, datoA);
-    int32_t b = obtenerValor(vmx, tipoB, datoB);
+    int32_t a = getValor(vmx, tipoA, datoA);
+    int32_t b = getValor(vmx, tipoB, datoB);
+    int32_t res = a - b;
 
-    actualizarCC(vmx, a - b, a, b, OP_CMP);
+    uint8_t flagC = ((uint32_t)a < (uint32_t)b); // Borrow
+    int64_t restaConSigno = (int64_t)a - (int64_t)b;
+    uint8_t flagV = (restaConSigno < INT32_MIN || restaConSigno > INT32_MAX);
+
+    actualizarCC(vmx, res, flagC, flagV);
 }
 
 // Ejemplo: Operador de 1 operando que afecta CC (NOT)
 void opNot(Vmx *vmx) {
-    uint8_t tipoA = obtenerTipo(vmx->registros[OP1]);
-    int32_t datoA = obtenerDato(vmx->registros[OP1]);
+    uint8_t tipoA = getTipo(vmx->registros[OP1]);
+    int32_t datoA = getDato(vmx->registros[OP1]);
 
-    int32_t a = obtenerValor(vmx, tipoA, datoA);
+    int32_t a = getValor(vmx, tipoA, datoA);
     int32_t res = ~a;
 
-    actualizarCC(vmx, res, a, 0, OP_NOT);
-    guardarResultado(vmx, tipoA, datoA, res);
+    actualizarCC(vmx, res, 0, 0); // NOT no genera carry ni overflow
+    setValor(vmx, tipoA, datoA, res);
 }
 
 // Ejemplo: Operador sin operandos (STOP)
