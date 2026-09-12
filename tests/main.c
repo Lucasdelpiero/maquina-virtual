@@ -9,6 +9,9 @@ int tests_fallados = 0;
 // Declaracion de las suites de prueba
 void correr_tests_inicializador(void);
 void correr_tests_operandos(void);
+void correr_tests_operadores(void);
+void correr_tests_etapa7(void);
+void correr_tests_binarios(void);
 
 int main(void) {
     printf("==================================================\n");
@@ -18,6 +21,9 @@ int main(void) {
     // Ejecucion de suites
     correr_tests_inicializador();
     correr_tests_operandos();
+    correr_tests_operadores();
+    correr_tests_etapa7();
+    correr_tests_binarios();
 
     // Resumen final
     printf("\n==================================================\n");

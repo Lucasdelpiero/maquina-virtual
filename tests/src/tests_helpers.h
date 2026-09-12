@@ -41,7 +41,7 @@ static inline void assert_registro(Vmx *vmx, int reg, int esperado, char nombre[
 
 // Comprueba el valor de un byte de la memoria fisica
 static inline void assert_memoria(Vmx *vmx, int dir, int esperado, char nombre[]) {
-    ASSERT_EQUAL((int)(vmx->memoria[dir] & 0xFF), (esperado & 0xFF), nombre);
+    ASSERT_EQUAL((int)(vmx->memoria.mem_principal[dir] & 0xFF), (esperado & 0xFF), nombre);
 }
 
 // Comprueba los 4 bits del registro de condicion (CC: N, Z, C, V)

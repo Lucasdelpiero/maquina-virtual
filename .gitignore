@@ -37,3 +37,5 @@ $RECYCLE.BIN/
 # --- Archivos de log y volcados temporales ---
 *.log
 *.tmp
+
+/temp

@@ -43,13 +43,27 @@
 		<Unit filename="src/tests_operandos.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="src/tests_operadores.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/tests_etapa7.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/tests_binarios.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="../src/Inicializador.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="../src/inicializador.h" />
 		<Unit filename="../src/decodificador.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/decodificador.h" />
+		<Unit filename="../src/disassembler.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/disassembler.h" />
 		<Unit filename="../src/errores.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -70,6 +84,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="../src/operadores.h" />
+		<Unit filename="../src/sys.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../src/sys.h" />
 		<Unit filename="../src/vmx.c">
 			<Option compilerVar="CC" />
 		</Unit>

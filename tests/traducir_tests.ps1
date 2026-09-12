@@ -1,6 +1,7 @@
 # Script de automatizacion para traducir programas .asm a .vmx con vmt.exe
 param (
-    [string]$VmtPath = ""
+    [string]$VmtPath = "",
+    [switch]$Force
 )
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -61,8 +62,8 @@ foreach ($file in $asmFiles) {
         New-Item -Path $targetFolder -ItemType Directory -Force | Out-Null
     }
 
-    # Verificar si ya esta al dia (timestamp)
-    if ((Test-Path $targetVmx) -and ((Get-Item $targetVmx).LastWriteTime -ge $file.LastWriteTime)) {
+    # Verificar si ya esta al dia (timestamp), a menos que se use -Force
+    if (-not $Force -and (Test-Path $targetVmx) -and ((Get-Item $targetVmx).LastWriteTime -ge $file.LastWriteTime)) {
         Write-Host "  [SKIP] $relPath (al dia)" -ForegroundColor DarkGray
         $alDia++
         continue

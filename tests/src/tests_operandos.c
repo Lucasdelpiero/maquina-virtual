@@ -1,6 +1,7 @@
 #include "tests_helpers.h"
 #include "../../src/operandos.h"
 #include "../../src/operadores.h"
+#include "../../src/memoria.h"
 #include <stdio.h>
 
 void correr_tests_operandos(void) {
@@ -45,7 +46,37 @@ void correr_tests_operandos(void) {
     // Inmediato -50: 0xFFCE en 16 bits
     ASSERT_EQUAL(get_valor(&vmx, TIPO_INMEDIATO, 0xFFCE), -50, "get_valor: Inmediato negativo 0xFFCE se lee como -50");
 
-    // 4. Tests combinar_mitad (read-modify-write para LDH y LDL)
+    // 4. Tests de memoria y registros de bus LAR, MAR, MBR
+    // Configuramos segmento 1 (datos): base = 100, tamano = 16284
+    vmx.memoria.tabla_segmentos[0] = 100;
+    vmx.memoria.tabla_segmentos[1] = (100 << 16) | 16284;
+    vmx.registros[DS] = 0x00010000;
+
+    // Operando de memoria [DS + 10]: offset 10, registro DS (27)
+    // Dato empaquetado: (10 << 8) | DS
+    int32_t op_mem = (10 << 8) | DS;
+    set_valor(&vmx, TIPO_MEMORIA, op_mem, 0x11223344);
+
+    // Verifica que se escribio correctamente y actualizo registros de bus
+    ASSERT_EQUAL(vmx.registros[LAR], 0x0001000A, "set_valor (memoria): LAR actualizado a 0x0001000A");
+    ASSERT_EQUAL(vmx.registros[MBR], 0x11223344, "set_valor (memoria): MBR actualizado con valor escrito");
+    ASSERT_EQUAL((int)(vmx.registros[MAR] & 0xFFFF), 110, "set_valor (memoria): MAR direccion fisica = 110 (100 + 10)");
+    ASSERT_EQUAL((int)((vmx.registros[MAR] >> 16) & 0xFFFF), 4, "set_valor (memoria): MAR cant_bytes = 4");
+
+    // Lee de memoria mediante get_valor
+    int32_t val_mem = get_valor(&vmx, TIPO_MEMORIA, op_mem);
+    ASSERT_EQUAL(val_mem, 0x11223344, "get_valor (memoria): Lee 0x11223344 desde [DS+10]");
+    ASSERT_EQUAL(vmx.registros[MBR], 0x11223344, "get_valor (memoria): MBR actualizado con valor leido");
+
+    // Test de las funciones con struct Memoria
+    Memoria mem_test;
+    inicializar_memoria(&mem_test);
+    mem_test.tabla_segmentos[1] = (100 << 16) | 1000;
+    set_valor_memoria(&mem_test, 0x00010006, 0x59B, 3);
+    int32_t val_mem_test = get_valor_memoria(mem_test, 0x00010006, 3);
+    ASSERT_EQUAL(val_mem_test, 0x59B, "get_valor_memoria/set_valor_memoria: Lee 0x59B de direccion logica");
+
+    // 5. Tests combinar_mitad (read-modify-write para LDH y LDL)
     // Inicializa EAX con 0x12345678
     vmx.registros[EAX] = 0x12345678;
 
@@ -57,7 +88,11 @@ void correr_tests_operandos(void) {
     combinar_mitad(&vmx, TIPO_REGISTRO, EAX, 0xBBBB, 0);
     ASSERT_EQUAL(vmx.registros[EAX], (int32_t)0xAAAABBBB, "combinar_mitad (LDL): Modifica parte baja a 0xBBBB y preserva parte alta");
 
-    // 5. Tests actualizar_cc (casos exactos de la tabla de la especificacion)
+    // combinar_mitad en memoria: [DS + 10] tenia 0x11223344
+    combinar_mitad(&vmx, TIPO_MEMORIA, op_mem, 0x9999, 1); // Parte alta -> 0x99993344
+    ASSERT_EQUAL(get_valor(&vmx, TIPO_MEMORIA, op_mem), (int32_t)0x99993344, "combinar_mitad (LDH memoria): Modifica parte alta en memoria");
+
+    // 6. Tests actualizar_cc (casos exactos de la tabla de la especificacion)
     // Caso 1: MOV -> res = -1, C=0, V=0 -> N=1, Z=0, C=0, V=0
     actualizar_cc(&vmx, -1, 0, 0);
     assert_cc(&vmx, 1, 0, 0, 0, "actualizar_cc: Caso MOV (res = -1)");

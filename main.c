@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "src/vmx.h"
+#include "src/logger.h"
 
 // Verifica si el nombre del archivo termina con la extension requerida .vmx
 static int tiene_extension_vmx(char nombre[]) {
@@ -13,32 +14,33 @@ static int tiene_extension_vmx(char nombre[]) {
 }
 
 // Parsea los argumentos de la linea de comandos
-// Sintaxis esperada: vmx <archivo.vmx> [-d] [debug]
+// Sintaxis esperada: vmx <archivo.vmx> [-d] [-dev]
 static int parsear_argumentos(int argc, char *argv[], char nombre_arch[], int *modo_debug, int *modo_disassembler) {
     int i;
 
+    // Usamos fprintf porque usamos stderr, es la salida para los errores
     if (argc < 2) {
-        printf("ERROR: Falta el nombre del archivo\n");
-        printf("Uso: vmx <archivo.vmx> [-d] [debug]\n");
+        fprintf(stderr, "ERROR: Falta el nombre del archivo\n");
+        fprintf(stderr, "Uso: vmx <archivo.vmx> [-d] [-dev]\n");
         return 0;
     }
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-d") == 0) {
             *modo_disassembler = 1;
-        } else if (strcmp(argv[i], "debug") == 0) {
+        } else if (strcmp(argv[i], "-dev") == 0) {
             *modo_debug = 1;
         } else if (argv[i][0] == '-') {
-            printf("ERROR: Opcion no reconocida '%s'\n", argv[i]);
-            printf("Uso: vmx <archivo.vmx> [-d] [debug]\n");
+            fprintf(stderr, "ERROR: Opcion no reconocida '%s'\n", argv[i]);
+            fprintf(stderr, "Uso: vmx <archivo.vmx> [-d] [-dev]\n");
             return 0;
         } else {
             if (strlen(nombre_arch) > 0) {
-                printf("ERROR: Se especifico mas de un archivo: '%s' y '%s'\n", nombre_arch, argv[i]);
+                fprintf(stderr, "ERROR: Se especifico mas de un archivo: '%s' y '%s'\n", nombre_arch, argv[i]);
                 return 0;
             }
             if (!tiene_extension_vmx(argv[i])) {
-                printf("ERROR: El archivo '%s' debe tener extension .vmx\n", argv[i]);
+                fprintf(stderr, "ERROR: El archivo '%s' debe tener extension .vmx\n", argv[i]);
                 return 0;
             }
             strcpy(nombre_arch, argv[i]);
@@ -46,8 +48,8 @@ static int parsear_argumentos(int argc, char *argv[], char nombre_arch[], int *m
     }
 
     if (strlen(nombre_arch) == 0) {
-        printf("ERROR: No se encontro el nombre del archivo\n");
-        printf("Uso: vmx <archivo.vmx> [-d] [debug]\n");
+        fprintf(stderr, "ERROR: No se encontro el nombre del archivo\n");
+        fprintf(stderr, "Uso: vmx <archivo.vmx> [-d] [-dev]\n");
         return 0;
     }
 
@@ -55,7 +57,7 @@ static int parsear_argumentos(int argc, char *argv[], char nombre_arch[], int *m
 }
 
 int main(int argc, char *argv[]) {
-    char nombre_arch[50] = "";
+    char nombre_arch[260] = "";
     int modo_debug = 0;
     int modo_disassembler = 0;
     Vmx vmx;
@@ -65,8 +67,11 @@ int main(int argc, char *argv[]) {
     }
 
     inicializar_vmx(&vmx, modo_debug, modo_disassembler);
+    logger("[MAIN] Parametros: Archivo='%s', Disassembler=%s, Debug=%s\n",
+           nombre_arch, modo_disassembler ? "SI" : "NO", modo_debug ? "SI" : "NO");
     cargar_programa(&vmx, nombre_arch);
     ejecutar_vmx(&vmx);
+    logger("[MAIN] Proceso finalizado exitosamente.\n");
 
     return 0;
 }

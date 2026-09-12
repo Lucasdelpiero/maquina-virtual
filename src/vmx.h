@@ -2,6 +2,7 @@
 #define VMX_H
 
 #include <stdint.h>
+#include "memoria.h"
 
 typedef struct Vmx Vmx;
 
@@ -37,8 +38,7 @@ extern FuncionOperacion tabla_operaciones[32];
 
 struct Vmx {
     int32_t registros[32];
-    uint8_t memoria[16384]; // 16 KiB
-    uint32_t tabla_segmentos[8];
+    Memoria memoria;
     int modo_debug;
     int modo_disassembler;
     void (*abortar)(char mensaje[]);

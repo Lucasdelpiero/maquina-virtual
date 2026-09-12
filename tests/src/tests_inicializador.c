@@ -28,7 +28,7 @@ void correr_tests_inicializador(void) {
 
     ok = 1;
     for (i = 0; i < 16384; i++) {
-        if (vmx.memoria[i] != 0) {
+        if (vmx.memoria.mem_principal[i] != 0) {
             ok = 0;
             break;
         }
@@ -37,7 +37,7 @@ void correr_tests_inicializador(void) {
 
     ok = 1;
     for (i = 0; i < 8; i++) {
-        if (vmx.tabla_segmentos[i] != 0xFFFFFFFF) {
+        if (vmx.memoria.tabla_segmentos[i] != 0xFFFFFFFF) {
             ok = 0;
             break;
         }
@@ -62,14 +62,14 @@ void correr_tests_inicializador(void) {
     ASSERT_EQUAL(vmx.registros[DS], 0x00010000, "cargar_programa: Registro DS apunta a 0x00010000");
     ASSERT_EQUAL(vmx.registros[IP], vmx.registros[CS], "cargar_programa: Registro IP inicializado igual a CS");
 
-    tam_cod = (int)(vmx.tabla_segmentos[0] & 0xFFFF);
+    tam_cod = (int)(vmx.memoria.tabla_segmentos[0] & 0xFFFF);
     ASSERT(tam_cod > 0, "cargar_programa: Entrada 0 de tabla de segmentos tiene tamano > 0");
-    ASSERT_EQUAL((int)((vmx.tabla_segmentos[0] >> 16) & 0xFFFF), 0, "cargar_programa: Entrada 0 tiene base 0");
+    ASSERT_EQUAL((int)((vmx.memoria.tabla_segmentos[0] >> 16) & 0xFFFF), 0, "cargar_programa: Entrada 0 tiene base 0");
 
-    base_datos = (int)((vmx.tabla_segmentos[1] >> 16) & 0xFFFF);
+    base_datos = (int)((vmx.memoria.tabla_segmentos[1] >> 16) & 0xFFFF);
     ASSERT_EQUAL(base_datos, tam_cod, "cargar_programa: Base del segmento de datos coincide con tamano de codigo");
 
-    tam_datos = (int)(vmx.tabla_segmentos[1] & 0xFFFF);
+    tam_datos = (int)(vmx.memoria.tabla_segmentos[1] & 0xFFFF);
     ASSERT_EQUAL(tam_datos, 16384 - tam_cod, "cargar_programa: Tamano de datos es 16384 - tamano_codigo");
 
     // 3. Test ip_valido
@@ -95,7 +95,7 @@ void correr_tests_inicializador(void) {
 
     inicializar_vmx(&vmx, 0, 0);
     cargar_programa(&vmx, ruta_vmx);
-    tam_cod = (int)(vmx.tabla_segmentos[0] & 0xFFFF);
+    tam_cod = (int)(vmx.memoria.tabla_segmentos[0] & 0xFFFF);
     ASSERT(tam_cod > 0, "cargar_programa: Programa conteo_bits.vmx cargado correctamente con tamano > 0");
     ASSERT_EQUAL(ip_valido(&vmx), 1, "ip_valido: Programa conteo_bits.vmx listo para ciclo de ejecucion");
 }

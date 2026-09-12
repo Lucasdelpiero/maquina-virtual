@@ -34,6 +34,46 @@
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="src/Inicializador.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/inicializador.h" />
+		<Unit filename="src/decodificador.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/decodificador.h" />
+		<Unit filename="src/disassembler.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/disassembler.h" />
+		<Unit filename="src/errores.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/errores.h" />
+		<Unit filename="src/logger.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/logger.h" />
+		<Unit filename="src/memoria.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/memoria.h" />
+		<Unit filename="src/operadores.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/operadores.h" />
+		<Unit filename="src/operandos.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/operandos.h" />
+		<Unit filename="src/sys.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/sys.h" />
+		<Unit filename="src/vmx.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/vmx.h" />
 		<Extensions />
 	</Project>
 </CodeBlocks_project_file>
