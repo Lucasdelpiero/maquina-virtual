@@ -1,0 +1,26 @@
+# depslib dependency file v1.0
+1789182366 source:c:\users\cabro\onedrive\desktop\mv programa\maquina_virtual\main.c
+	<stdio.h>
+	<stdlib.h>
+	"decodificador.h"
+
+1789177636 c:\users\cabro\onedrive\desktop\mv programa\maquina_virtual\include\decodificador.h
+
+1789182349 source:c:\users\cabro\onedrive\desktop\mv programa\maquina_virtual\src\decodificador.c
+	"decodificador.h"
+	<stdio.h>
+	<stdint.h>
+	"memoria.h"
+
+1789182716 c:\users\cabro\onedrive\desktop\mv programa\maquina_virtual\src\decodificador.h
+	<stdio.h>
+
+1789183312 source:c:\users\cabro\onedrive\desktop\mv programa\maquina_virtual\src\memoria.c
+	<stdio.h>
+	<stdint.h>
+	"memoria.h"
+
+1789183291 c:\users\cabro\onedrive\desktop\mv programa\maquina_virtual\src\memoria.h
+	<stdio.h>
+	<stdint.h>
+
