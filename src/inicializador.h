@@ -1,6 +1,6 @@
 #ifndef HEADER_222A8304CF3FC179
 #define HEADER_222A8304CF3FC179
-#endif // header guard
+
 #include <stdio.h>
 #include "memoria.h"
 
@@ -13,4 +13,8 @@
 */
 
 
-int leer_archivo(char archNom[], Memoria * mem);
+int leer_archivo(char archNom[], Memoria *mem);
+void setear_tabla_segmento(Memoria *mem, int tamCS);
+
+
+#endif // header guard

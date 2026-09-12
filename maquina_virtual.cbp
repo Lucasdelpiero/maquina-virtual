@@ -36,10 +36,10 @@
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="src/decodificador.c">
+		<Unit filename="src/inicializador.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="src/decodificador.h" />
+		<Unit filename="src/inicializador.h" />
 		<Unit filename="src/memoria.c">
 			<Option compilerVar="CC" />
 		</Unit>
