@@ -37,3 +37,29 @@
 	"memoria.h"
 	"inicializador.h"
 
+1789197657 source:c:\users\cabro\onedrive\desktop\arq comp\maquina virtual\maquina-virtual\src\inicializador.c
+	<stdio.h>
+	<stdint.h>
+	"memoria.h"
+	"inicializador.h"
+
+1789235728 c:\users\cabro\onedrive\desktop\arq comp\maquina virtual\maquina-virtual\src\memoria.h
+	<stdio.h>
+	<stdint.h>
+
+1789185526 c:\users\cabro\onedrive\desktop\arq comp\maquina virtual\maquina-virtual\src\inicializador.h
+	<stdio.h>
+	"memoria.h"
+
+1789236506 source:c:\users\cabro\onedrive\desktop\arq comp\maquina virtual\maquina-virtual\main.c
+	<stdio.h>
+	<stdlib.h>
+	"src\memoria.h"
+	"src\inicializador.h"
+
+1789235599 source:c:\users\cabro\onedrive\desktop\arq comp\maquina virtual\maquina-virtual\src\memoria.c
+	<stdio.h>
+	<stdlib.h>
+	<stdint.h>
+	"memoria.h"
+

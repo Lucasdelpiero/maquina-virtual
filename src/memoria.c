@@ -22,6 +22,7 @@ int32_t get_dir_fisica(Memoria mem, int32_t dir_logica){
     return dir_fisica;
 }
 
+// NECESITA una DIRECION LOGICA, para sacar datos con OPERANDOS usar get_valor_operando
 int32_t get_valor_memoria(Memoria mem, int32_t dir_logica, int bytes_accedidos){
     int32_t resultado=0;
     int i = 0;
@@ -71,7 +72,8 @@ void escribir_byte(Memoria * mem, int pos, uint8_t dato){
     //printf("Mem[%d]: %X\n", pos, dato);
 }
 
-int32_t set_valor_memoria(Memoria *mem, int32_t dir_logica, int32_t dato, int cant_accedidos){
+// NECESITA una direccion LOGICA, para escribir usando operandos usar set_valor_operando
+void set_valor_memoria(Memoria *mem, int32_t dir_logica, int32_t dato, int cant_accedidos){
     int32_t dir_fisica = get_dir_fisica(*mem, dir_logica);
     int i;
     int bytes[4];
@@ -87,6 +89,33 @@ int32_t set_valor_memoria(Memoria *mem, int32_t dir_logica, int32_t dato, int ca
         offset++;
     }
 
+}
+
+// Recibe [offset (16 bits) | registro(5 bits)] con el registro siendo un puntero, DS O CS para funcionar bien
+void set_valor_operando(Memoria *mem, int32_t operando, int32_t dato, int cant_accedidos){
+    uint32_t dir_logica;
+    uint32_t offset = operando >> 8;
+    uint32_t registro = operando & 0XFF;
+    uint32_t tempDS = 0X00010000;
+    if (registro == 0) // Si no hay registro se pone el DS por defecto
+        registro = tempDS;
+
+    dir_logica = registro + offset;
+
+    set_valor_memoria(mem, dir_logica, dato, cant_accedidos);
+}
+
+uint32_t get_valor_operando(Memoria mem, int32_t operando, int cant_accedidos){
+    uint32_t dir_logica;
+    uint32_t offset = operando >> 8;
+    uint32_t registro = operando & 0XFF;
+    uint32_t tempDS = 0X00010000;
+    if (registro == 0) // Si no hay registro se pone el DS por defecto
+        registro = tempDS;
+
+    dir_logica = registro + offset;
+
+    return get_valor_memoria(mem, dir_logica, cant_accedidos);
 }
 
 void inicializar_memoria(Memoria *mem){
