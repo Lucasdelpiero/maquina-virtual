@@ -4,6 +4,7 @@
 #include "memoria.h"
 #include "errores.h"
 #include "logger.h"
+#include "vmx.h"
 
 /*
     Tareas del modulo memoria:
@@ -13,6 +14,20 @@
             -Para esto traduce posicion de memoria logica a fisica usando tabla de segmentos
             -Tambien usa la cant de bytes accedidos, mas que nada para el decodificador y el operador MOV
 */
+
+// Setea LAR, MAR, MBR segun los parametros
+void set_registros_memoria(Memoria mem, dir_logica, int cant_accedidos, int32_t dir_fisica, int32_t valor) {
+    // LAR = direccion logica accedida
+    mem->registros[CodigoRegistro.LAR] = dir_logica;
+
+    // MAR = [CANT ACCEDIDOS  |   DIR_FISICA ]     [16 bits | 16 bits]
+    mem->registros[CodigoRegistro.MAR] = cant_accedidos;
+    mem->registros[CodigoRegistro.MAR] = mem->registros[CodigoRegistro.MAR] << 16;
+    mem->registros[CodigoRegistro.MAR] += dir_fisica
+
+    // MBR = valor guardado/sacado
+    mem->registros[CodRegistro.MBR] = valor;
+}
 
 int32_t get_dir_fisica(Memoria mem, int32_t dir_logica) {
     int16_t segmento = (dir_logica >> 16) & 0xFFFF;
@@ -181,6 +196,9 @@ int32_t leer_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes) {
     logger("[MEMORIA] Leer %d byte(s) en DirFisica=0x%04X => 0x%08X (%d)\n",
            cant_bytes, dir_fisica, resultado, resultado);
 
+    // Escribe LAR, MAR, MBR
+    set_registros_memoria(mem, dir_logica, cant_bytes, dir_fisica, resultado);
+
     return resultado;
 }
 
@@ -196,6 +214,7 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
         abortar("Fallo de segmento: intento de escribir fuera de la memoria fisica.");
     }
 
+
     // Descompone el valor de 32 bits en bytes big-endian
     for (i = 0; i < 4; i++) {
         bytes[3 - i] = (valor >> (8 * i)) & 0xFF;
@@ -206,6 +225,9 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
         mem->mem_principal[dir_fisica + offset] = (uint8_t)bytes[i];
         offset++;
     }
+
+    // Escribe LAR, MAR, MBR
+    set_registros_memoria(mem, dir_logica, cant_bytes, dir_fisica, valor);
 
     logger("[MEMORIA] Escribir %d byte(s) en DirFisica=0x%04X <= valor=0x%08X (%d)\n",
            cant_bytes, dir_fisica, valor, valor);
