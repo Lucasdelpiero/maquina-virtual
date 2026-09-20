@@ -33,7 +33,7 @@ void mostrar_valor_SYS(uint8_t bytes[], int tamanio, int formato) {
     for (i = 0; i < tamanio; i++)
         numero |= ((uint32_t)bytes[i]) << (8 * i);
 
-    if (formato & 0x10) {
+    if (formato & 0x10) { //muestra el valor en binario
         for (i = tamanio - 1; i >= 0; i--)
             for (j = 7; j >= 0; j--)
                 printf("%d", (bytes[i] >> j) & 1);
@@ -54,11 +54,11 @@ void mostrar_valor_SYS(uint8_t bytes[], int tamanio, int formato) {
 
     printf("\n");
 }
-
+//Leer el valor y lo devuelve en uint32_t
 uint32_t leer_numero_SYS(int formato) {
     uint32_t numero = 0;
 
-    if (formato & 0x01)
+    if (formato & 0x01) 
         scanf("%u", &numero);
 
     else if (formato & 0x04)
@@ -112,7 +112,7 @@ void SYS(Vmx *vmx, int tipoA, int datoA) {
         valor = get_valor(vmx, 1 , direccion);
         for (i = 0; i < cantidad; i++) {
             for (j = 0; j < tamanio; j++)
-                bytes[j] = (valor >> (8 * j)) & 0xFF;
+                bytes[j] = (valor >> (8 * j)) & 0xFF; //Guarda la secuensia de bits del valor a mostrar
             valor = valor >> 8 * tamanio;
             mostrar_valor_SYS(bytes, tamanio, formato);
         }
@@ -120,7 +120,7 @@ void SYS(Vmx *vmx, int tipoA, int datoA) {
     else 
         if (valorA == 1) {
             for (i = 0; i < cantidad; i++) {
-                numero = leer_numero_SYS(formato);
+                numero = leer_numero_SYS(formato); 
                 Resultado = (int32_t) numero;
                 Guardar_Resultado(vmx , tipoA , datoA , Resultado);
         }
@@ -230,7 +230,7 @@ void MUL(Vmx *vmx , int tipoA ,int datoA , int tipoB , int datoB) {
     int32_t  valorB = get_valor(vmx, tipoB, datoB);
     int32_t Resultado = valorA * valorB;
     int carry = ((uint64_t)(uint32_t)valorA * (uint32_t)valorB) >  Maximo;
-    int desbordamiento = ((int64_t)valorA * valorB > Maximo || (int64_t)valorA * valorB < Minimo);
+    int desbordamiento = ((int64_t)valorA * valorB > 0x0FFFFFFF || (int64_t)valorA * valorB < Minimo);
       ActualizarCC(vmx , Resultado , carry , desbordamiento);
        Guardar_Resultado(vmx , tipoA , datoA , Resultado);
 }
