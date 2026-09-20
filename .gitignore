@@ -1,0 +1,41 @@
+# ==============================================================================
+# Git Ignore — Proyecto Máquina Virtual (C / Code::Blocks)
+# ==============================================================================
+
+# --- Salidas de compilación y binarios ---
+bin/
+obj/
+*.exe
+*.o
+*.obj
+*.out
+*.app
+*.dll
+*.so
+*.dylib
+
+# --- Archivos de sesión y temporales de Code::Blocks ---
+*.layout
+*.depend
+*.save
+*.bak
+*.orig
+
+# --- Historial local y configuraciones de editores / IDEs ---
+.history/
+.vscode/
+.idea/
+.gemini/
+
+# --- Archivos temporales del sistema operativo ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# --- Archivos de log y volcados temporales ---
+*.log
+*.tmp
+
+/temp
