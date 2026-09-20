@@ -384,7 +384,6 @@ void RND(Vmx *vmx , int tipoA ,int datoA , int tipoB , int datoB) {
     int32_t  valorB = get_valor(vmx, tipoB, datoB);
     int32_t Resultado = rand() % (valorB + 1);;
     int  carry = 0 , desbordamiento = 0;
-        Resultado = valorA >> valorB ;
       ActualizarCC(vmx , Resultado , carry , desbordamiento);
       Guardar_Resultado(vmx , tipoA , datoA , Resultado);
 }
