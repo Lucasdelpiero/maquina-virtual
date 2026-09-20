@@ -38,17 +38,17 @@ void mostrar_valor_SYS(uint8_t bytes[], int tamanio, int formato) {
             for (j = 7; j >= 0; j--)
                 printf("%d", (bytes[i] >> j) & 1);
     }
-
+   else
     if (formato & 0x08)
         printf("%X", numero);
-
+    else
     if (formato & 0x04)
         printf("%o", numero);
-
+    else
     if (formato & 0x02)
         for (i = 0; i < tamanio; i++)
             printf("%c", bytes[i]);
-
+    else
     if (formato & 0x01)
         printf("%u", numero);
 
@@ -103,7 +103,10 @@ void SYS(Vmx *vmx, int tipoA, int datoA) {
     uint32_t numero;
 
     uint8_t bytes[tamanio];
-    int i, j;
+    int i, j , k ;
+
+   if (cantidad * tamanio > 32 || (formato != 1 && formato != 2 && formato != 4 && formato != 8 && formato != 10))
+       Detener_Ejecusion();
 
     if (valorA == 2) {
         valor = get_valor(vmx, 1 , direccion);
@@ -362,7 +365,8 @@ void LDL(Vmx *vmx , int tipoA ,int datoA , int tipoB , int datoB) {
     int32_t  valorB = get_valor(vmx, tipoB, datoB);
     int32_t Resultado = 0;
     int  carry = 0 , desbordamiento = 0;
-        Resultado = valorA >> valorB ;
+        int32_t Resultado = (int32_t)((valorA & 0xFFFF0000u) |  (valorB & 0x0000FFFFu));
+
       ActualizarCC(vmx , Resultado , carry , desbordamiento);
 
         Guardar_Resultado(vmx , tipoA , datoA , Resultado);
@@ -373,7 +377,7 @@ void LDH(Vmx *vmx , int tipoA ,int datoA , int tipoB , int datoB) {
     int32_t  valorB = get_valor(vmx, tipoB, datoB);
     int32_t Resultado = 0;
     int  carry = 0 , desbordamiento = 0;
-        Resultado = valorA >> valorB ;
+        int32_t Resultado = (int32_t)((valorB & 0xFFFF0000u) |  (valorA & 0x0000FFFFu)) ;
       ActualizarCC(vmx , Resultado , carry , desbordamiento);
 
         Guardar_Resultado(vmx , tipoA , datoA , Resultado);
