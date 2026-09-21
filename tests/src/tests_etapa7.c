@@ -2,7 +2,18 @@
 #include "../../src/disassembler.h"
 #include "../../src/sys.h"
 #include "../../src/operandos.h"
+#include "../../src/errores.h"
 #include <string.h>
+#include <setjmp.h>
+
+static jmp_buf s_jmp_abort_sys;
+static int s_abort_sys_llamado = 0;
+
+static void mock_abortar_sys(char mensaje[]) {
+    (void)mensaje;
+    s_abort_sys_llamado = 1;
+    longjmp(s_jmp_abort_sys, 1);
+}
 
 void correr_tests_etapa7(void) {
     Vmx vmx;
@@ -56,4 +67,47 @@ void correr_tests_etapa7(void) {
 
     desensamblar_instruccion(&vmx, buffer, sizeof(buffer));
     ASSERT(strstr(buffer, "STOP") != NULL, "desensamblar_instruccion genera 'STOP'");
+
+    // 5. Validaciones estrictas de llamadas al sistema (SYS)
+    set_abortar_handler(mock_abortar_sys);
+
+    // Configurar operando para SYS 2 (WRITE)
+    vmx.registros[OP1] = (TIPO_INMEDIATO << 24) | 2;
+    vmx.registros[EDX] = 0x00010000; // dentro de datos
+
+    // SYS con mascara de modo 0 (invalido)
+    vmx.registros[EAX] = 0x00;
+    vmx.registros[ECX] = (4 << 16) | 1;
+    s_abort_sys_llamado = 0;
+    if (setjmp(s_jmp_abort_sys) == 0) {
+        op_sys(&vmx);
+    }
+    ASSERT(s_abort_sys_llamado == 1, "SYS con modo en EAX = 0 aborta");
+
+    // SYS con tamano = 0 en ECX (invalido)
+    vmx.registros[EAX] = 0x01;
+    vmx.registros[ECX] = (0 << 16) | 1;
+    s_abort_sys_llamado = 0;
+    if (setjmp(s_jmp_abort_sys) == 0) {
+        op_sys(&vmx);
+    }
+    ASSERT(s_abort_sys_llamado == 1, "SYS con tamano <= 0 en ECX aborta");
+
+    // SYS con tamano = 5 en ECX (invalido)
+    vmx.registros[ECX] = (5 << 16) | 1;
+    s_abort_sys_llamado = 0;
+    if (setjmp(s_jmp_abort_sys) == 0) {
+        op_sys(&vmx);
+    }
+    ASSERT(s_abort_sys_llamado == 1, "SYS con tamano > 4 en ECX aborta");
+
+    // SYS con cantidad = 0 en ECX (invalido)
+    vmx.registros[ECX] = (4 << 16) | 0;
+    s_abort_sys_llamado = 0;
+    if (setjmp(s_jmp_abort_sys) == 0) {
+        op_sys(&vmx);
+    }
+    ASSERT(s_abort_sys_llamado == 1, "SYS con cantidad <= 0 en ECX aborta");
+
+    set_abortar_handler(NULL);
 }

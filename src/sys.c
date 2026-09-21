@@ -2,6 +2,7 @@
 #include "operandos.h"
 #include "memoria.h"
 #include "logger.h"
+#include "errores.h"
 #include <stdio.h>
 #include <stdint.h>
 
@@ -106,6 +107,8 @@ static int32_t leer_numero_sys(int formato) {
         return (int32_t)unum;
     }
 
+    logger("[ERROR][SYS] Formato de lectura en EAX=0x%X no pertenece a ningun tipo de dato valido\n", formato);
+    abortar("Error: Formato de lectura SYS invalido.");
     return 0;
 }
 
@@ -131,19 +134,25 @@ void op_sys(Vmx *vmx) {
     cantidad = vmx->registros[ECX] & 0xFFFF;
     tamanio = (vmx->registros[ECX] >> 16) & 0xFFFF;
 
-    if (tamanio <= 0) {
-        tamanio = 4;
+    if (tamanio <= 0 || tamanio > 4) {
+        logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);
+        vmx->abortar("Error: Tamano invalido en SYS.");
+        return;
     }
     if (cantidad <= 0) {
-        cantidad = 1;
+        logger("[ERROR][SYS] Cantidad invalida en ECX: %d (debe ser mayor a cero)\n", cantidad);
+        vmx->abortar("Error: Cantidad invalida en SYS.");
+        return;
+    }
+
+    if ((modo & 0x1F) == 0) {
+        logger("[ERROR][SYS] Mascara de formato en EAX=0x%X invalida (ningun formato valido en bits 0..4)\n", modo);
+        vmx->abortar("Error: Formato de SYS invalido.");
+        return;
     }
 
     logger("[SYS] Invocando syscall %d: Modo=0x%X, DirBase=0x%08X, Cantidad=%d, Tamano=%d\n",
            num_sys, modo, dir_base, cantidad, tamanio);
-
-    if ((modo & 0x1F) == 0) {
-        logger("[WARN][SYS] Mascara de formato en EAX=0x%X no contiene ningun formato valido (bits 0..4 en cero)\n", modo);
-    }
 
     if (num_sys == 1) {
         // SYS 1: READ

@@ -16,67 +16,58 @@
 */
 
 // Setea LAR, MAR, MBR segun los parametros
-void set_registros_memoria(Memoria mem, dir_logica, int cant_accedidos, int32_t dir_fisica, int32_t valor) {
+void set_registros_memoria(Memoria *mem, int32_t dir_logica, int cant_accedidos, int32_t dir_fisica, int32_t valor) {
+    if (mem == NULL || mem->registros == NULL) {
+        return;
+    }
     // LAR = direccion logica accedida
-    mem->registros[CodigoRegistro.LAR] = dir_logica;
+    mem->registros[LAR] = dir_logica;
 
     // MAR = [CANT ACCEDIDOS  |   DIR_FISICA ]     [16 bits | 16 bits]
-    mem->registros[CodigoRegistro.MAR] = cant_accedidos;
-    mem->registros[CodigoRegistro.MAR] = mem->registros[CodigoRegistro.MAR] << 16;
-    mem->registros[CodigoRegistro.MAR] += dir_fisica
+    mem->registros[MAR] = cant_accedidos;
+    mem->registros[MAR] = mem->registros[MAR] << 16;
+    mem->registros[MAR] += dir_fisica;
 
     // MBR = valor guardado/sacado
-    mem->registros[CodRegistro.MBR] = valor;
+    mem->registros[MBR] = valor;
 }
 
-int32_t get_dir_fisica(Memoria mem, int32_t dir_logica) {
+int32_t get_dir_fisica(Memoria *mem, int32_t dir_logica) {
     int16_t segmento = (dir_logica >> 16) & 0xFFFF;
     int16_t offset = dir_logica & 0xFFFF;
 
-    if (segmento < 0 || segmento >= TAM_SEGMENTOS || mem.tabla_segmentos[segmento] == 0xFFFFFFFF) {
+    if (segmento < 0 || segmento >= TAM_SEGMENTOS || mem->tabla_segmentos[segmento] == 0xFFFFFFFF) {
         logger("[ERROR][MEMORIA] Segmento invalido o no asignado: segmento=%d, dir_logica=0x%08X\n", segmento, dir_logica);
         abortar("ERROR: Segmento invalido o no asignado.");
     }
 
-    int32_t dir_base = (mem.tabla_segmentos[segmento] >> 16) & 0xFFFF;
+    int32_t dir_base = (mem->tabla_segmentos[segmento] >> 16) & 0xFFFF;
     int32_t dir_fisica = dir_base + offset;
 
     return dir_fisica;
 }
 
-int32_t get_valor_memoria(Memoria mem, int32_t dir_logica, int bytes_accedidos) {
+int32_t get_valor_memoria(Memoria *mem, int32_t dir_logica, int bytes_accedidos) {
+    int32_t dir_fisica;
     int32_t resultado = 0;
-    int i = 0;
-    int16_t segmento = (dir_logica >> 16) & 0xFFFF;
-    int16_t offset = dir_logica & 0xFFFF;
+    int i;
 
-    if (segmento < 0 || segmento >= TAM_SEGMENTOS || mem.tabla_segmentos[segmento] == 0xFFFFFFFF) {
-        logger("[ERROR][MEMORIA] Segmento invalido o no asignado: segmento=%d, dir_logica=0x%08X\n", segmento, dir_logica);
-        abortar("ERROR: Segmento invalido o no asignado.");
+    if (bytes_accedidos < 1 || bytes_accedidos > 4) {
+        logger("[ERROR][MEMORIA] Cantidad de bytes a acceder invalida: %d (debe ser 1..4)\n", bytes_accedidos);
+        abortar("ERROR: Cantidad de bytes a acceder invalida.");
     }
 
-    int32_t dir_base = (mem.tabla_segmentos[segmento] >> 16) & 0xFFFF;
-    int32_t tam_segmento = (mem.tabla_segmentos[segmento] & 0xFFFF);
-    int32_t dir_fisica = dir_base + offset;
-
-    int32_t limite_segmento = dir_base + tam_segmento;
-    int32_t limite_acceso = dir_fisica + bytes_accedidos;
-
-    if (dir_base > dir_fisica) {
-        logger("[ERROR][MEMORIA] Direccion base (%d) mayor que fisica (%d) en segmento %d\n", dir_base, dir_fisica, segmento);
-        abortar("ERROR: Direccion base mayor que direccion fisica.");
-    }
-    if (limite_segmento < limite_acceso) {
-        logger("[ERROR][MEMORIA] Limite de segmento (%d) menor que limite de acceso (%d) en segmento %d\n", limite_segmento, limite_acceso, segmento);
-        abortar("ERROR: Limite de segmento menor que limite de acceso.");
-    }
+    dir_fisica = (int32_t)traducir_direccion(mem, dir_logica, (uint16_t)bytes_accedidos);
 
     // Concatena el valor segun la cantidad de bytes requeridos
-    resultado = mem.mem_principal[dir_fisica];
+    resultado = mem->mem_principal[dir_fisica];
     for (i = 1; i < bytes_accedidos; i++) {
         resultado = resultado << 8;
-        resultado += mem.mem_principal[dir_fisica + i];
+        resultado += mem->mem_principal[dir_fisica + i];
     }
+
+    // Setea registros de bus LAR, MAR, MBR
+    set_registros_memoria(mem, dir_logica, bytes_accedidos, dir_fisica, resultado);
 
     return resultado;
 }
@@ -108,7 +99,7 @@ int32_t set_valor_memoria(Memoria *mem, int32_t dir_logica, int32_t dato, int ca
         abortar("ERROR: Cantidad de bytes a acceder invalida.");
     }
 
-    dir_fisica = get_dir_fisica(*mem, dir_logica);
+    dir_fisica = (int32_t)traducir_direccion(mem, dir_logica, (uint16_t)cant_accedidos);
 
     // Separa un entero de 32 bits en 4 elementos de 8 bits big-endian
     for (i = 0; i < 4; i++) {
@@ -122,6 +113,9 @@ int32_t set_valor_memoria(Memoria *mem, int32_t dir_logica, int32_t dato, int ca
         offset++;
     }
 
+    // Setea registros de bus LAR, MAR, MBR
+    set_registros_memoria(mem, dir_logica, cant_accedidos, dir_fisica, dato);
+
     return 0;
 }
 
@@ -133,6 +127,7 @@ void inicializar_memoria(Memoria *mem) {
     for (i = 0; i < TAM_SEGMENTOS; i++) {
         mem->tabla_segmentos[i] = 0xFFFFFFFF;
     }
+    mem->registros = NULL;
 }
 
 // ============================================================================
@@ -153,8 +148,8 @@ uint16_t traducir_direccion(Memoria *mem, int32_t dir_logica, uint16_t cant_byte
         abortar("Fallo de segmento: codigo de segmento invalido o no asignado.");
     }
 
-    dir_base = (int)((mem->tabla_segmentos[segmento] >> 16) & 0xFFFF);
-    tam_segmento = (int)(mem->tabla_segmentos[segmento] & 0xFFFF);
+    dir_base = (mem->tabla_segmentos[segmento] >> 16) & 0xFFFF;
+    tam_segmento = mem->tabla_segmentos[segmento] & 0xFFFF;
 
     // Valida que el acceso no sobrepase el tamano del segmento
     if (offset < 0 || (offset + cant_bytes) > tam_segmento) {
@@ -196,9 +191,6 @@ int32_t leer_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes) {
     logger("[MEMORIA] Leer %d byte(s) en DirFisica=0x%04X => 0x%08X (%d)\n",
            cant_bytes, dir_fisica, resultado, resultado);
 
-    // Escribe LAR, MAR, MBR
-    set_registros_memoria(mem, dir_logica, cant_bytes, dir_fisica, resultado);
-
     return resultado;
 }
 
@@ -214,7 +206,6 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
         abortar("Fallo de segmento: intento de escribir fuera de la memoria fisica.");
     }
 
-
     // Descompone el valor de 32 bits en bytes big-endian
     for (i = 0; i < 4; i++) {
         bytes[3 - i] = (valor >> (8 * i)) & 0xFF;
@@ -225,9 +216,6 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
         mem->mem_principal[dir_fisica + offset] = (uint8_t)bytes[i];
         offset++;
     }
-
-    // Escribe LAR, MAR, MBR
-    set_registros_memoria(mem, dir_logica, cant_bytes, dir_fisica, valor);
 
     logger("[MEMORIA] Escribir %d byte(s) en DirFisica=0x%04X <= valor=0x%08X (%d)\n",
            cant_bytes, dir_fisica, valor, valor);

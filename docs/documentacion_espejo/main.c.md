@@ -1,32 +1,4 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include "src/vmx.h"
-#include "src/logger.h"
-#include "src/disassembler.h"
-
-// Verifica si el nombre del archivo termina con la extension requerida .vmx
-static int tiene_extension_vmx(char nombre[]) {
-    int len;
-    if (nombre == NULL) return 0;
-    len = strlen(nombre);
-    if (len < 4) return 0;
-    return (strcmp(&nombre[len - 4], ".vmx") == 0);
-}
-
-// Parsea los argumentos de la linea de comandos
-// Sintaxis esperada: vmx <archivo.vmx> [-d] [-dev]
-static int parsear_argumentos(int argc, char *argv[], char nombre_arch[], int *modo_debug, int *modo_disassembler) {
-    int i;
-
-    // Usamos fprintf porque usamos stderr, es la salida para los errores
-    // El primer argumento es el nombre del archivo
-    if (argc < 2) {
-        fprintf(stderr, "ERROR: Falta el nombre del archivo\n");
-        fprintf(stderr, "Uso: vmx <archivo.vmx> [-d] [-dev]\n");
-        return 0;
-    }
-
+```C
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-d") == 0) {
             *modo_disassembler = 1;
@@ -47,17 +19,17 @@ static int parsear_argumentos(int argc, char *argv[], char nombre_arch[], int *m
             }
             strcpy(nombre_arch, argv[i]);
         }
-    }
+```
 
-    if (strlen(nombre_arch) == 0) {
-        fprintf(stderr, "ERROR: No se encontro el nombre del archivo\n");
-        fprintf(stderr, "Uso: vmx <archivo.vmx> [-d] [-dev]\n");
-        return 0;
-    }
+El orden de los argumentos es variable, puede venir el nombre del archivo, antes los argumentos, y demas.
 
-    return 1;
-}
+Por ello para cada argumento, verificamos cual argumento es, si es un "-" devolvemos que el nombre no existe, y si se encontro el nombre del archivo, devolvemos que se especifico mas de un archivo, tambien si aun no se encontro el nombre del archivo, validamos que tenga extension .vmx y sino abortamos
 
+**La especificacion no aclara que el orden es fijo**, asi que lo mejor es hacerlo variable.
+
+### main
+
+```c
 int main(int argc, char *argv[]) {
     char nombre_arch[260] = "";
     int modo_debug = 0;
@@ -79,6 +51,14 @@ int main(int argc, char *argv[]) {
 
     ejecutar_vmx(&vmx);
     logger("[MAIN] Proceso finalizado exitosamente.\n");
+```
 
-    return 0;
-}
+El orden es:
+
+1. Parsear argumentos: 
+2. Inicializar la vmx: inicializar structs, arrays en cero, etc.
+3. Cargar el programa (leer archivo binario), se carga a la ram todo y luego se deja de usar el archivo.
+4. Si el usuario paso el argumento -d, se ejecuta el dissambler y luego de todos modos se ejecuta el programa
+5. Por ultimo se ejecuta todo el programa, leyendo de la memoria ram y ejecutando instrucciones
+
+Si algun paso falla, se hace return 1 y se aborta el programa, en todos los casos se imprime antes el motivo de cierre.

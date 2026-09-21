@@ -73,7 +73,7 @@ void correr_tests_operandos(void) {
     inicializar_memoria(&mem_test);
     mem_test.tabla_segmentos[1] = (100 << 16) | 1000;
     set_valor_memoria(&mem_test, 0x00010006, 0x59B, 3);
-    int32_t val_mem_test = get_valor_memoria(mem_test, 0x00010006, 3);
+    int32_t val_mem_test = get_valor_memoria(&mem_test, 0x00010006, 3);
     ASSERT_EQUAL(val_mem_test, 0x59B, "get_valor_memoria/set_valor_memoria: Lee 0x59B de direccion logica");
 
     // 5. Tests combinar_mitad (read-modify-write para LDH y LDL)

@@ -220,7 +220,7 @@ void op_add(Vmx *vmx) {
 
     uint32_t op_a = a;
     uint32_t op_b = b;
-    uint64_t suma_sin_signo = (uint64_t)op_a + op_b;
+    uint64_t suma_sin_signo = (uint64_t)op_a + op_b; // Solo casteamos uno, el otro se castea automaticamente por el operador suma
     int carry = (suma_sin_signo > UINT32_MAX);
 
     int64_t suma_con_signo = (int64_t)a + (int64_t)b;
@@ -408,25 +408,32 @@ void op_shl(Vmx *vmx) {
     int i;
     uint32_t u_a = a;
 
-    if (b > 0) {
-        if (b >= 32) {
-            carry = (a != 0);
-            res = 0;
-        } else {
-            // Deteccion de acarreo bit a bit si se pierde algun bit en uno
-            i = 0;
-            while (i < b && carry == 0) {
-                if ((u_a >> (31 - i)) & 1) {
-                    carry = 1;
-                }
-                i++;
+    if (b < 0) {
+        logger("[ERROR][EXEC] SHL con cantidad de corrimientos negativa: b=%d\n", b);
+        vmx->abortar("Error: Cantidad de corrimientos negativa en instruccion SHL.");
+        return;
+    }
+
+    if (b == 0) {
+        res = a;
+        carry = 0;
+        overflow = 0;
+    } else if (b >= 32) {
+        carry = (a != 0);
+        res = 0;
+        overflow = (a != 0);
+    } else {
+        // Deteccion de acarreo bit a bit si se pierde algun bit en uno
+        i = 0;
+        while (i < b && carry == 0) {
+            if ((u_a >> (31 - i)) & 1) {
+                carry = 1;
             }
-            res = (int32_t)(u_a << b);
+            i++;
         }
+        res = (int32_t)(u_a << b);
         int64_t shift_64 = (int64_t)a << (b < 63 ? b : 63);
         overflow = (shift_64 < INT32_MIN || shift_64 > INT32_MAX);
-    } else {
-        res = a;
     }
 
     actualizar_cc(vmx, res, carry, overflow);
@@ -450,31 +457,36 @@ void op_shr(Vmx *vmx) {
     uint32_t u_a = a;
     uint32_t temp;
 
-    if (b > 0) {
-        if (b >= 32) {
-            carry = (a != 0);
-            res = 0;
-        } else {
-            // Deteccion de acarreo bit a bit si se pierde algun bit en uno
-            i = 0;
-            while (i < b && carry == 0) {
-                if ((u_a >> i) & 1) {
-                    carry = 1;
-                }
-                i++;
-            }
-            // Reconstruccion del valor desplazado bit a bit
-            n = 32 - b;
-            temp = u_a >> b;
-            for (i = 0; i < n; i++) {
-                aux = temp & 1;
-                aux = aux << i;
-                res += aux;
-                temp = temp >> 1;
-            }
-        }
-    } else {
+    if (b < 0) {
+        logger("[ERROR][EXEC] SHR con cantidad de corrimientos negativa: b=%d\n", b);
+        vmx->abortar("Error: Cantidad de corrimientos negativa en instruccion SHR.");
+        return;
+    }
+
+    if (b == 0) {
         res = a;
+        carry = 0;
+    } else if (b >= 32) {
+        carry = (a != 0);
+        res = 0;
+    } else {
+        // Deteccion de acarreo bit a bit si se pierde algun bit en uno
+        i = 0;
+        while (i < b && carry == 0) {
+            if ((u_a >> i) & 1) {
+                carry = 1;
+            }
+            i++;
+        }
+        // Reconstruccion del valor desplazado bit a bit
+        n = 32 - b;
+        temp = u_a >> b;
+        for (i = 0; i < n; i++) {
+            aux = temp & 1;
+            aux = aux << i;
+            res += aux;
+            temp = temp >> 1;
+        }
     }
 
     actualizar_cc(vmx, res, carry, 0);
@@ -495,22 +507,27 @@ void op_sar(Vmx *vmx) {
     int i;
     uint32_t u_a = a;
 
-    if (b > 0) {
-        if (b >= 32) {
-            carry = (a < 0) ? 1 : (a != 0);
-            res = (a < 0) ? -1 : 0;
-        } else {
-            i = 0;
-            while (i < b && carry == 0) {
-                if ((u_a >> i) & 1) {
-                    carry = 1;
-                }
-                i++;
-            }
-            res = a >> b;
-        }
-    } else {
+    if (b < 0) {
+        logger("[ERROR][EXEC] SAR con cantidad de corrimientos negativa: b=%d\n", b);
+        vmx->abortar("Error: Cantidad de corrimientos negativa en instruccion SAR.");
+        return;
+    }
+
+    if (b == 0) {
         res = a;
+        carry = 0;
+    } else if (b >= 32) {
+        carry = (a < 0) ? 1 : (a != 0);
+        res = (a < 0) ? -1 : 0;
+    } else {
+        i = 0;
+        while (i < b && carry == 0) {
+            if ((u_a >> i) & 1) {
+                carry = 1;
+            }
+            i++;
+        }
+        res = a >> b;
     }
 
     actualizar_cc(vmx, res, carry, 0);
@@ -558,7 +575,11 @@ void op_rnd(Vmx *vmx) {
     int32_t res;
 
     // RND: numero aleatorio entre 0 y operando B; no modifica CC
-    if (b <= 0) {
+    if (b < 0) {
+        logger("[ERROR][EXEC] RND con limite negativo: b=%d\n", b);
+        vmx->abortar("Error: Limite superior negativo en instruccion RND.");
+        return;
+    } else if (b == 0) {
         res = 0;
     } else {
         res = rand() % (b + 1);

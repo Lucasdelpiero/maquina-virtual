@@ -23,7 +23,7 @@ void setear_tabla_segmento(Memoria *mem, int tamCS) {
     int16_t inicio_cs = 0;
     int16_t fin_cs = tamCS;
     int16_t inicio_ds = fin_cs;
-    int16_t fin_ds = TAM_MEMORIA_PRINCIPAL - fin_cs;
+    int16_t fin_ds = TAM_MEMORIA_PRINCIPAL - fin_cs; // Es en realidad el tamaño del data segment
 
     mem->tabla_segmentos[0] = ((uint32_t)inicio_cs << 16) | ((uint32_t)fin_cs & 0xFFFF);
     mem->tabla_segmentos[1] = ((uint32_t)inicio_ds << 16) | ((uint32_t)fin_ds & 0xFFFF);
@@ -34,93 +34,11 @@ void setear_tabla_segmento(Memoria *mem, int tamCS) {
     }
 }
 
-// Lectura y carga del archivo binario .vmx en memoria
-int leer_archivo(char archNom[], Memoria *mem) {
-    inicializar_memoria(mem);
-    uint8_t byteLeido;
-    char identificador[6];
-    int version;
-    int tamCS = 0;
-    int temp[2];
-    int i;
-
-    FILE *f = fopen(archNom, "rb");
-    if (f == NULL) {
-        logger("[ERROR][CARGA] No se pudo abrir el archivo especificado: '%s'\n", archNom);
-        abortar("Error: No se pudo abrir el archivo .vmx especificado.");
-        return -1;
-    }
-
-    // Carga identificador (5 bytes)
-    for (i = 0; i < 5; i++) {
-        if (fread(&byteLeido, sizeof(uint8_t), 1, f) != 1) {
-            fclose(f);
-            logger("[ERROR][CARGA] Fallo al leer identificador de cabecera en '%s'\n", archNom);
-            abortar("Error: No se pudo leer el identificador de cabecera.");
-            return -1;
-        }
-        identificador[i] = (char)byteLeido;
-    }
-    identificador[5] = '\0';
-
-    if (strcmp(identificador, "VMX26") != 0) {
-        fclose(f);
-        logger("[ERROR][CARGA] Identificador invalido: '%s' (se esperaba 'VMX26') en '%s'\n", identificador, archNom);
-        abortar("Error: Identificador de cabecera invalido. Se esperaba 'VMX26'.");
-        return -1;
-    }
-
-    // Carga version (1 byte)
-    if (fread(&byteLeido, sizeof(uint8_t), 1, f) != 1) {
-        fclose(f);
-        logger("[ERROR][CARGA] Fallo al leer version en '%s'\n", archNom);
-        abortar("Error: No se pudo leer la version del archivo .vmx.");
-        return -1;
-    }
-    version = byteLeido;
-    if (version != 1) {
-        fclose(f);
-        logger("[ERROR][CARGA] Version %d no compatible (se esperaba 1) en '%s'\n", version, archNom);
-        abortar("Error: Version de archivo .vmx no compatible. Se esperaba version 1.");
-        return -1;
-    }
-
-    // Carga tamano de codigo big-endian (2 bytes)
-    for (i = 0; i < 2; i++) {
-        if (fread(&byteLeido, sizeof(uint8_t), 1, f) != 1) {
-            fclose(f);
-            logger("[ERROR][CARGA] Fallo al leer tamano de codigo en '%s'\n", archNom);
-            abortar("Error: No se pudo leer el tamano de codigo.");
-            return -1;
-        }
-        temp[i] = byteLeido;
-    }
-    tamCS = (temp[0] << 8) | temp[1];
-
-    if (tamCS <= 0 || tamCS > TAM_MEMORIA_PRINCIPAL) {
-        fclose(f);
-        logger("[ERROR][CARGA] Tamano de codigo invalido: %d bytes (limite 1..%d) en '%s'\n", tamCS, TAM_MEMORIA_PRINCIPAL, archNom);
-        abortar("Error: Tamano de codigo invalido en la cabecera.");
-        return -1;
-    }
-
-    // Carga cada byte leido a la memoria principal
-    i = 0;
-    while (i < tamCS && fread(&byteLeido, sizeof(uint8_t), 1, f) == 1) {
-        escribir_byte(mem, i, byteLeido);
-        i++;
-    }
-
-    fclose(f);
-    setear_tabla_segmento(mem, tamCS);
-    return 0;
-}
-
 void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler) {
     int i;
     vmx->modo_debug = modo_debug;
     vmx->modo_disassembler = modo_disassembler;
-    vmx->abortar = abortar;
+    vmx->abortar = abortar; //abortar esta importada desde errors.c
 
     logger_habilitar(modo_debug);
     logger("[INIT] Inicializando VMX: modo_debug=%d, modo_disassembler=%d.\n", modo_debug, modo_disassembler);
@@ -132,6 +50,7 @@ void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler) {
 
     // Inicializa la memoria principal y tabla de descriptores
     inicializar_memoria(&vmx->memoria);
+    vmx->memoria.registros = (uint32_t *)vmx->registros;
 
     // Inicializa la tabla de operaciones
     inicializar_operadores();
@@ -219,7 +138,7 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
     vmx->memoria.tabla_segmentos[0] = (uint32_t)tamCS & 0xFFFF;
 
     // Entrada 1 (Datos): Base = tamCS, Tamano = 16384 - tamCS
-    vmx->memoria.tabla_segmentos[1] = (((uint32_t)tamCS & 0xFFFF) << 16) | ((uint32_t)(16384 - tamCS) & 0xFFFF);
+    vmx->memoria.tabla_segmentos[1] = ((uint32_t)tamCS << 16) | (16384 - tamCS);
 
     // Entradas 2 a 7: Invalidas (0xFFFFFFFF)
     for (i = 2; i < 8; i++) {
@@ -231,7 +150,7 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
     // DS = Segmento 1, Offset 0 -> 0x00010000
     // IP = CS
     vmx->registros[CS] = 0x00000000;
-    vmx->registros[DS] = 0x00010000;
+    vmx->registros[DS] = 0x00010000; // Este 1 es porque el DS es un puntero y apunta en los primeros 16 bits al 1er segmento
     vmx->registros[IP] = vmx->registros[CS];
 
     logger("[CARGA] Archivo '%s' cargado con exito.\n", ruta_archivo);

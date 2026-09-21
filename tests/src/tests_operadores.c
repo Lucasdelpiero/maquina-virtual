@@ -1,6 +1,17 @@
 #include "tests_helpers.h"
 #include "../../src/operadores.h"
 #include "../../src/operandos.h"
+#include "../../src/errores.h"
+#include <setjmp.h>
+
+static jmp_buf s_jmp_abort;
+static int s_abort_llamado = 0;
+
+static void mock_abortar_operadores(char mensaje[]) {
+    (void)mensaje;
+    s_abort_llamado = 1;
+    longjmp(s_jmp_abort, 1);
+}
 
 // Helper para configurar OP1 u OP2 en registros
 static void set_operando_reg(Vmx *vmx, int reg_op, int tipo, int32_t dato) {
@@ -141,4 +152,47 @@ void correr_tests_operadores(void) {
     // Test STOP
     op_stop(&vmx);
     assert_registro(&vmx, IP, -1, "STOP fija IP = -1");
+
+    // 13. Tests de validacion de corrimientos negativos y limites invalidos
+    set_abortar_handler(mock_abortar_operadores);
+
+    // SHL con corrimiento negativo
+    vmx.registros[EAX] = 10;
+    vmx.registros[EBX] = -1;
+    set_operando_reg(&vmx, OP1, TIPO_REGISTRO, EAX);
+    set_operando_reg(&vmx, OP2, TIPO_REGISTRO, EBX);
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_shl(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "SHL con cantidad de corrimientos negativa aborta");
+
+    // SHR con corrimiento negativo
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_shr(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "SHR con cantidad de corrimientos negativa aborta");
+
+    // SAR con corrimiento negativo
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_sar(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "SAR con cantidad de corrimientos negativa aborta");
+
+    // RND con limite negativo
+    vmx.registros[EBX] = -5;
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_rnd(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "RND con limite superior negativo aborta");
+
+    // RND con limite 0 genera 0 sin abortar
+    vmx.registros[EBX] = 0;
+    op_rnd(&vmx);
+    assert_registro(&vmx, EAX, 0, "RND con limite 0 genera 0");
+
+    set_abortar_handler(NULL);
 }
