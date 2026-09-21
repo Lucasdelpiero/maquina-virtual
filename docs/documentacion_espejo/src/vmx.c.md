@@ -1,4 +1,4 @@
-## int ip_valido(Vmx *vmx) {
+## int ip_valido(Vmx \*vmx) {
 
 Esta funcion valida que el ip sea valido, puede no ser valido al encontrar un STOP o por un error.
 
@@ -41,3 +41,49 @@ Si el segmento no es cero, debemos abortar porque el segmento debe ser el cero.
 
 Si la base mas el offset exede el tamaño del segmento, tambien debemos cortar, es un error.
 
+### Ejecutar Instruccion
+
+```c
+void ejecutar_instruccion(Vmx *vmx) {
+    int opc;
+
+    opc = vmx->registros[OPC];
+
+    // Verifica que el codigo de operacion este dentro de los limites y que la operacion exista
+    if (opc < 0 || opc >= 32 || tabla_operaciones[opc] == NULL) {
+        logger("[ERROR][VMX] Instruccion invalida o no implementada: OPC=0x%02X (%d) en IP=0x%08X\n",
+               opc, opc, vmx->registros[IP]);
+        vmx->abortar("Error: Instruccion invalida o codigo de operacion inexistente.");
+        return;
+    }
+
+    logger("[VMX] Delegando operacion: %s (OPC=0x%02X) [IP=0x%08X]\n",
+           obtener_mnemonico(opc), opc, vmx->registros[IP]);
+
+    // Fijar directo a la operacion correspondiente
+    tabla_operaciones[opc](vmx);
+}
+```
+
+Para ejecutar una instruccion, nos fijamos el registro opc, validamos que sea valido y luego directamente ejecutamos la funcion asociada al codigo, desde el array de punteros a funciones.
+
+## Ciclo principal
+
+```c
+// Ciclo principal de ejecucion: busqueda, decodificacion y ejecucion
+void ejecutar_vmx(Vmx *vmx) {
+    logger("[VMX] Iniciando ciclo de ejecucion.\n");
+
+    while (ip_valido(vmx)) {
+        // 1. Busqueda y Decodificacion: lee la instruccion en IP, carga OPC, OP1, OP2 y avanza IP
+        decodificar_instruccion(vmx);
+
+        // 2. Ejecucion: delega la operacion cargada en OPC
+        ejecutar_instruccion(vmx);
+    }
+
+    logger("[VMX] Ciclo de ejecucion finalizado.\n");
+}
+```
+
+Mientras la instruccion siga siendo valida, vamos decodificando desde la memoria y vamos ejecutando cada instruccion.

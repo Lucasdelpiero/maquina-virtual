@@ -21,18 +21,18 @@ static int32_t leer_operando(Vmx *vmx, int tipo, int *pos) {
 
     if (tipo == TIPO_REGISTRO) {
         // 1 byte: codigo de registro en los 5 bits menos significativos
-        dato = (int32_t)(vmx->memoria.mem_principal[p] & 0x1F);
+        dato = vmx->memoria.mem_principal[p] & 0x1F;
         *pos = p + 1;
     } else if (tipo == TIPO_INMEDIATO) {
         // 2 bytes big-endian: valor entero de 16 bits
         uint16_t val16 = ((uint16_t)vmx->memoria.mem_principal[p] << 8) | (uint16_t)vmx->memoria.mem_principal[p + 1];
-        dato = (int32_t)val16;
+        dato = val16;
         *pos = p + 2;
     } else if (tipo == TIPO_MEMORIA) {
         // 3 bytes: 2 bytes de offset big-endian + 1 byte con codigo de registro (5 bits bajos)
         uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[p] << 8) | (uint16_t)vmx->memoria.mem_principal[p + 1];
         uint8_t cod_reg = vmx->memoria.mem_principal[p + 2] & 0x1F;
-        dato = ((int32_t)offset << 8) | (int32_t)cod_reg;
+        dato = ((int32_t)offset << 8) | cod_reg;
         *pos = p + 3;
     }
 
@@ -53,7 +53,7 @@ void decodificar_instruccion(Vmx *vmx) {
 
     // IP es una direccion logica relativa al segmento de codigo (segmento 0)
     offset_ip = vmx->registros[IP] & 0xFFFF;
-    tam_codigo = (int)(vmx->memoria.tabla_segmentos[0] & 0xFFFF);
+    tam_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
 
     if (offset_ip < 0 || offset_ip >= tam_codigo) {
         logger("[ERROR][DECODER] Intento de decodificar fuera del segmento de codigo: offset_ip=%d, tam_codigo=%d, IP=0x%08X\n",

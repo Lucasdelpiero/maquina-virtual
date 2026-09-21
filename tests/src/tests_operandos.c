@@ -2,7 +2,18 @@
 #include "../../src/operandos.h"
 #include "../../src/operadores.h"
 #include "../../src/memoria.h"
+#include "../../src/errores.h"
 #include <stdio.h>
+#include <setjmp.h>
+
+static jmp_buf s_jmp_abort_operandos;
+static int s_abort_llamado_operandos = 0;
+
+static void mock_abortar_operandos(char mensaje[]) {
+    (void)mensaje;
+    s_abort_llamado_operandos = 1;
+    longjmp(s_jmp_abort_operandos, 1);
+}
 
 void correr_tests_operandos(void) {
     Vmx vmx;
@@ -116,4 +127,31 @@ void correr_tests_operandos(void) {
     // Caso 6: SHL 1073741824, 2 -> res = 0, C=1, V=1 -> N=0, Z=1, C=1, V=1
     actualizar_cc(&vmx, 0, 1, 1);
     assert_cc(&vmx, 0, 1, 1, 1, "actualizar_cc: Caso SHL (res = 0, Z=1, C=1, V=1)");
+
+    // 7. Pruebas de aborto con setjmp ante accesos invalidos
+    set_abortar_handler(mock_abortar_operandos);
+
+    // Intento de direccionamiento de memoria con offset negativo que desborda el segmento ([DS - 4])
+    s_abort_llamado_operandos = 0;
+    if (setjmp(s_jmp_abort_operandos) == 0) {
+        // Offset -4 crudo en 16 bits = 0xFFFC
+        calcular_direccion_logica_memoria(&vmx, ((int32_t)0xFFFC << 8) | DS);
+    }
+    ASSERT(s_abort_llamado_operandos == 1, "calcular_direccion_logica_memoria: Desplazamiento negativo fuera de segmento aborta");
+
+    // Intento de acceder fuera de los limites del segmento aborta en traducir_direccion
+    s_abort_llamado_operandos = 0;
+    if (setjmp(s_jmp_abort_operandos) == 0) {
+        traducir_direccion(&vmx.memoria, 0x00010000 + 20000, 4);
+    }
+    ASSERT(s_abort_llamado_operandos == 1, "traducir_direccion: Acceso fuera de los limites del segmento aborta");
+
+    // Intento de escribir en operando inmediato
+    s_abort_llamado_operandos = 0;
+    if (setjmp(s_jmp_abort_operandos) == 0) {
+        set_valor(&vmx, TIPO_INMEDIATO, 10, 50);
+    }
+    ASSERT(s_abort_llamado_operandos == 1, "set_valor: Intento de escribir en operando inmediato aborta");
+
+    set_abortar_handler(NULL);
 }

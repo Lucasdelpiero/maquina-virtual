@@ -33,7 +33,7 @@ int ip_valido(Vmx *vmx) {
     }
 
     // El tamano del codigo esta almacenado en los 16 bits bajos de tabla_segmentos[0]
-    tamano_codigo = (int)(vmx->memoria.tabla_segmentos[0] & 0xFFFF);
+    tamano_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
 
     /*
         IP = 0x0000 0004
@@ -83,20 +83,13 @@ void ejecutar_instruccion(Vmx *vmx) {
 
 // Ciclo principal de ejecucion: busqueda, decodificacion y ejecucion
 void ejecutar_vmx(Vmx *vmx) {
-    char linea_desensamblada[128];
     logger("[VMX] Iniciando ciclo de ejecucion.\n");
 
     while (ip_valido(vmx)) {
         // 1. Busqueda y Decodificacion: lee la instruccion en IP, carga OPC, OP1, OP2 y avanza IP
         decodificar_instruccion(vmx);
 
-        // 2. Desensamblado opcional si se paso la bandera -d
-        if (vmx->modo_disassembler) {
-            desensamblar_instruccion(vmx, linea_desensamblada, 128);
-            printf("%s\n", linea_desensamblada);
-        }
-
-        // 3. Ejecucion: delega la operacion cargada en OPC
+        // 2. Ejecucion: delega la operacion cargada en OPC
         ejecutar_instruccion(vmx);
     }
 

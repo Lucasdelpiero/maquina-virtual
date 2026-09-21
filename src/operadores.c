@@ -32,7 +32,7 @@ void actualizar_cc(Vmx *vmx, int32_t resultado, int carry, int overflow) {
     v = overflow ? 1 : 0;
 
     // Empaqueta los 4 flags en los 4 bits mas significativos; bits 0..27 quedan en cero
-    vmx->registros[CC] = (int32_t)((n << 31) | (z << 30) | (c << 29) | (v << 28));
+    vmx->registros[CC] = (n << 31) | (z << 30) | (c << 29) | (v << 28);
 }
 
 // Macro auxiliar para imprimir el log de una operacion aritmetica o logica
@@ -44,7 +44,7 @@ static void log_operacion_2(char nombre[], int32_t a, int32_t b, int32_t res, in
 
 // Realiza un salto sumando el offset al segmento de codigo (CS)
 static void ejecutar_salto(Vmx *vmx, int32_t offset) {
-    int tam_codigo = (int)(vmx->memoria.tabla_segmentos[0] & 0xFFFF);
+    int tam_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
     vmx->registros[IP] = vmx->registros[CS] + offset;
     logger("[EXEC] Salto ejecutado -> IP=0x%08X (offset=%d)\n", vmx->registros[IP], offset);
     if (offset < 0 || offset >= tam_codigo) {
@@ -269,7 +269,7 @@ void op_mul(Vmx *vmx) {
     uint64_t prod_sin_signo = (uint64_t)op_a * op_b;
     int carry = (prod_sin_signo > UINT32_MAX);
 
-    int32_t res = (int32_t)prod_con_signo;
+    int32_t res = prod_con_signo;
 
     actualizar_cc(vmx, res, carry, overflow);
     set_valor(vmx, tipo_a, dato_a, res);
@@ -382,14 +382,20 @@ void op_swap(Vmx *vmx) {
     int tipo_b = get_tipo(vmx->registros[OP2]);
     int32_t dato_b = get_dato(vmx->registros[OP2]);
 
+    if (tipo_a == TIPO_INMEDIATO || tipo_b == TIPO_INMEDIATO) {
+        logger("[ERROR][EXEC] Intento de SWAP con operando inmediato: tipo_a=%d, tipo_b=%d\n", tipo_a, tipo_b);
+        vmx->abortar("Error: SWAP requiere operandos de tipo registro o memoria.");
+        return;
+    }
+
     int32_t a = get_valor(vmx, tipo_a, dato_a);
     int32_t b = get_valor(vmx, tipo_b, dato_b);
 
     set_valor(vmx, tipo_a, dato_a, b);
     set_valor(vmx, tipo_b, dato_b, a);
 
-    // SWAP afecta a CC de la misma manera que el ultimo XOR entre ellos
-    actualizar_cc(vmx, a, 0, 0);
+    // SWAP afecta a CC de la misma manera que el ultimo XOR entre ellos (el nuevo valor de opA, que es b)
+    actualizar_cc(vmx, b, 0, 0);
     logger("[EXEC] SWAP: intercambiados opA=%d y opB=%d [CC afectado como XOR: N=%d Z=%d C=0 V=0]\n",
            b, a, FLAG_N(vmx->registros[CC]), FLAG_Z(vmx->registros[CC]));
 }

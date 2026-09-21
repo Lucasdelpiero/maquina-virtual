@@ -4,7 +4,7 @@
 
 // Extrae los 8 bits superiores (tipo de operando)
 int get_tipo(int32_t operando) {
-    return (int)((operando >> 24) & 0xFF);
+    return (operando >> 24) & 0xFF;
 }
 
 // Extrae los 24 bits inferiores (dato del operando)
@@ -29,20 +29,42 @@ int32_t calcular_direccion_logica_memoria(Vmx *vmx, int32_t dato) {
     uint16_t offset_crudo;
     int32_t offset;
     int32_t dir_base;
+    int segmento;
+    int offset_base;
+    int offset_total;
+    int32_t dir_logica;
 
     /* Dato esta armado asi en este caso, por ser un operando de memoria
      31                24 23                 8 7       5 4         0
     ┌────────────────────┬────────────────────┬─────────┬───────────┐
-    │     (sin uso, 0)   │  Offset (16 bits)  │ (ceros) │  Cod Reg  │
-    │                    │                    │         │  (5 bits) │
+     │     (sin uso, 0)   │  Offset (16 bits)  │ (ceros) │  Cod Reg  │
+     │                    │                    │         │  (5 bits) │
     └────────────────────┴────────────────────┴─────────┴───────────┘
     */
     cod_reg = dato & 0x1F;
-    offset_crudo = (uint16_t)((dato >> 8) & 0xFFFF);
+    offset_crudo = (dato >> 8) & 0xFFFF;
     offset = extender_signo_16_a_32(offset_crudo);
     dir_base = vmx->registros[cod_reg];
 
-    return dir_base + offset;
+    // Separamos la direccion base en codigo de segmento y desplazamiento base
+    segmento = (dir_base >> 16) & 0xFFFF;
+    offset_base = dir_base & 0xFFFF;
+
+    // Calculamos el desplazamiento final dentro del segmento
+    offset_total = offset_base + offset;
+
+    // Si el desplazamiento total es negativo, queda fuera del inicio del segmento
+    if (offset_total < 0) {
+        logger("[ERROR][OPERANDO] Desplazamiento negativo fuera de segmento: base=%d, offset=%d (total=%d)\n",
+               offset_base, offset, offset_total);
+        vmx->abortar("Fallo de segmento: acceso fuera de los limites del segmento.");
+        return 0;
+    }
+
+    // Armamos la direccion logica: 16 bits altos = segmento, 16 bits bajos = desplazamiento
+    dir_logica = (segmento << 16) + offset_total;
+
+    return dir_logica;
 }
 
 // Resuelve una direccion de memoria traduciendo la direccion logica a fisica
@@ -102,10 +124,10 @@ void combinar_mitad(Vmx *vmx, int tipo, int32_t dato, uint16_t mitad_nueva, int 
 
     if (cargar_alta) {
         // LDH: carga los 16 bits altos preservando los 16 bits bajos
-        combinado = (actual & 0x0000FFFF) | ((int32_t)mitad_nueva << 16); //movemos lo nuevo a los altos y reesguardamos lo actual en los bajos
+        combinado = (actual & 0x0000FFFF) | ((uint32_t)mitad_nueva << 16);
     } else {
         // LDL: carga los 16 bits bajos preservando los 16 bits altos
-        combinado = (actual & (int32_t)0xFFFF0000) | (uint16_t)mitad_nueva;
+        combinado = (actual & 0xFFFF0000) | mitad_nueva;
     }
 
     logger("[OPERANDO] Combinar mitad (%s): anterior=0x%08X, mitad_nueva=0x%04X => nuevo=0x%08X\n",

@@ -15,42 +15,54 @@ static void mostrar_valor_sys(int32_t valor, int tamanio, int formato) {
     numero = (uint32_t)valor;
     mostrado = 0;
 
-    // Bit 4 (0x10): Binario
+    // Bit 4 (0x10): Binario con prefijo 0b
     if (formato & 0x10) {
         if (mostrado) {
             printf(" ");
         }
-        for (i = (tamanio * 8) - 1; i >= 0; i--) {
-            printf("%d", (int)((numero >> i) & 1));
+        printf("0b");
+        if (numero == 0) {
+            printf("0");
+        } else {
+            int bit_alto = (tamanio * 8) - 1;
+            while (bit_alto > 0 && (((numero >> bit_alto) & 1) == 0)) {
+                bit_alto--;
+            }
+            for (i = bit_alto; i >= 0; i--) {
+                printf("%d", (int)((numero >> i) & 1));
+            }
         }
         mostrado = 1;
     }
 
-    // Bit 3 (0x08): Hexadecimal
+    // Bit 3 (0x08): Hexadecimal con prefijo 0x
     if (formato & 0x08) {
         if (mostrado) {
             printf(" ");
         }
-        printf("%X", numero);
+        printf("0x%X", numero);
         mostrado = 1;
     }
 
-    // Bit 2 (0x04): Octal
+    // Bit 2 (0x04): Octal con prefijo 0o
     if (formato & 0x04) {
         if (mostrado) {
             printf(" ");
         }
-        printf("%o", numero);
+        printf("0o%o", numero);
         mostrado = 1;
     }
 
-    // Bit 1 (0x02): Caracteres
+    // Bit 1 (0x02): Caracteres (orden big-endian, no imprimibles como '.')
     if (formato & 0x02) {
         if (mostrado) {
             printf(" ");
         }
-        for (i = 0; i < tamanio; i++) {
+        for (i = tamanio - 1; i >= 0; i--) {
             char c = (char)((numero >> (8 * i)) & 0xFF);
+            if (c < 32 || c > 126) {
+                c = '.';
+            }
             printf("%c", c);
         }
         mostrado = 1;
@@ -79,7 +91,7 @@ static int32_t leer_numero_sys(int formato) {
     if (formato & 0x01) {
         // Decimal con signo
         scanf("%d", &num);
-        return (int32_t)num;
+        return num;
     } else if (formato & 0x08) {
         // Hexadecimal
         scanf("%x", &unum);
@@ -91,7 +103,7 @@ static int32_t leer_numero_sys(int formato) {
     } else if (formato & 0x02) {
         // Caracter
         scanf(" %c", &c);
-        return (int32_t)(uint8_t)c;
+        return (uint8_t)c;
     } else if (formato & 0x10) {
         // Binario
         scanf("%35s", binario);
@@ -158,12 +170,13 @@ void op_sys(Vmx *vmx) {
         // SYS 1: READ
         for (i = 0; i < cantidad; i++) {
             dir_logica = dir_base + (i * tamanio);
-            dir_fisica = traducir_direccion(&vmx->memoria, dir_logica, (uint16_t)tamanio);
+            dir_fisica = traducir_direccion(&vmx->memoria, dir_logica, tamanio);
 
             printf("[%04X]: ", dir_fisica);
             valor = leer_numero_sys(modo);
 
-            escribir_memoria(&vmx->memoria, dir_fisica, (uint8_t)tamanio, valor);
+            escribir_memoria(&vmx->memoria, dir_fisica, tamanio, valor);
+            set_registros_memoria(&vmx->memoria, dir_logica, tamanio, dir_fisica, valor);
             logger("[SYS] READ celda %d: DirLogica=0x%08X DirFisica=0x%04X Valor=%d (0x%X)\n",
                    i, dir_logica, dir_fisica, valor, valor);
         }
@@ -171,9 +184,10 @@ void op_sys(Vmx *vmx) {
         // SYS 2: WRITE
         for (i = 0; i < cantidad; i++) {
             dir_logica = dir_base + (i * tamanio);
-            dir_fisica = traducir_direccion(&vmx->memoria, dir_logica, (uint16_t)tamanio);
+            dir_fisica = traducir_direccion(&vmx->memoria, dir_logica, tamanio);
 
-            valor = leer_memoria(&vmx->memoria, dir_fisica, (uint8_t)tamanio);
+            valor = leer_memoria(&vmx->memoria, dir_fisica, tamanio);
+            set_registros_memoria(&vmx->memoria, dir_logica, tamanio, dir_fisica, valor);
 
             printf("[%04X]: ", dir_fisica);
             mostrar_valor_sys(valor, tamanio, modo);

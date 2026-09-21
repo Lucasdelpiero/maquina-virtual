@@ -78,14 +78,14 @@ void formatear_operando(char destino[], int tipo, int32_t dato) {
     destino[0] = '\0';
 
     if (tipo == TIPO_REGISTRO) {
-        cod_reg = (int)(dato & 0x1F);
+        cod_reg = dato & 0x1F;
         sprintf(destino, "%s", obtener_nombre_registro(cod_reg));
     } else if (tipo == TIPO_INMEDIATO) {
-        valor_inmediato = extender_signo_16_a_32((uint16_t)(dato & 0xFFFF));
+        valor_inmediato = extender_signo_16_a_32(dato & 0xFFFF);
         sprintf(destino, "%d", valor_inmediato);
     } else if (tipo == TIPO_MEMORIA) {
-        cod_reg = (int)(dato & 0x1F);
-        offset = extender_signo_16_a_32((uint16_t)((dato >> 8) & 0xFFFF));
+        cod_reg = dato & 0x1F;
+        offset = extender_signo_16_a_32((dato >> 8) & 0xFFFF);
         if (offset == 0) {
             sprintf(destino, "[%s]", obtener_nombre_registro(cod_reg));
         } else if (offset > 0) {
@@ -117,16 +117,16 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
         tipo_a = (primer_byte >> 6) & 0x03;
 
         if (tipo_a == TIPO_REGISTRO) {
-            dato_a = (int32_t)(vmx->memoria.mem_principal[pos] & 0x1F);
+            dato_a = vmx->memoria.mem_principal[pos] & 0x1F;
             pos += 1;
         } else if (tipo_a == TIPO_INMEDIATO) {
             uint16_t val16 = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
-            dato_a = (int32_t)val16;
+            dato_a = val16;
             pos += 2;
         } else if (tipo_a == TIPO_MEMORIA) {
             uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
             uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0x1F;
-            dato_a = ((int32_t)offset << 8) | (int32_t)cod_reg;
+            dato_a = ((int32_t)offset << 8) | cod_reg;
             pos += 3;
         }
     } else {
@@ -136,31 +136,31 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
 
         // B se codifica primero en el binario
         if (tipo_b == TIPO_REGISTRO) {
-            dato_b = (int32_t)(vmx->memoria.mem_principal[pos] & 0x1F);
+            dato_b = vmx->memoria.mem_principal[pos] & 0x1F;
             pos += 1;
         } else if (tipo_b == TIPO_INMEDIATO) {
             uint16_t val16 = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
-            dato_b = (int32_t)val16;
+            dato_b = val16;
             pos += 2;
         } else if (tipo_b == TIPO_MEMORIA) {
             uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
             uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0x1F;
-            dato_b = ((int32_t)offset << 8) | (int32_t)cod_reg;
+            dato_b = ((int32_t)offset << 8) | cod_reg;
             pos += 3;
         }
 
         // A se codifica segundo
         if (tipo_a == TIPO_REGISTRO) {
-            dato_a = (int32_t)(vmx->memoria.mem_principal[pos] & 0x1F);
+            dato_a = vmx->memoria.mem_principal[pos] & 0x1F;
             pos += 1;
         } else if (tipo_a == TIPO_INMEDIATO) {
             uint16_t val16 = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
-            dato_a = (int32_t)val16;
+            dato_a = val16;
             pos += 2;
         } else if (tipo_a == TIPO_MEMORIA) {
             uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
             uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0x1F;
-            dato_a = ((int32_t)offset << 8) | (int32_t)cod_reg;
+            dato_a = ((int32_t)offset << 8) | cod_reg;
             pos += 3;
         }
     }
@@ -176,16 +176,19 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
     char byte_str[8];
     int i;
     for (i = 0; i < cant_bytes && (dir_fisica + i) < TAM_MEMORIA_PRINCIPAL; i++) {
-        sprintf(byte_str, "%02X ", vmx->memoria.mem_principal[dir_fisica + i]);
+        if (i > 0) {
+            strcat(bytes_hex, " "); //dejar espacio entre palabras
+        }
+        sprintf(byte_str, "%02X", vmx->memoria.mem_principal[dir_fisica + i]);
         strcat(bytes_hex, byte_str);
     }
 
     if (opc == OP_STOP) {
-        snprintf(buffer, tam_buffer, "[%04X] %-18s | %s", dir_fisica, bytes_hex, mnem);
+        snprintf(buffer, tam_buffer, "[%04X] %-17s | %s", dir_fisica, bytes_hex, mnem);
     } else if (opc <= 0x0A) {
-        snprintf(buffer, tam_buffer, "[%04X] %-18s | %s %s", dir_fisica, bytes_hex, mnem, op_a_str);
+        snprintf(buffer, tam_buffer, "[%04X] %-17s | %s %s", dir_fisica, bytes_hex, mnem, op_a_str);
     } else {
-        snprintf(buffer, tam_buffer, "[%04X] %-18s | %s %s, %s", dir_fisica, bytes_hex, mnem, op_a_str, op_b_str);
+        snprintf(buffer, tam_buffer, "[%04X] %-17s | %s %s, %s", dir_fisica, bytes_hex, mnem, op_a_str, op_b_str);
     }
 
     return cant_bytes;
@@ -193,7 +196,7 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
 
 void desensamblar_programa(Vmx *vmx) {
     int dir = 0;
-    int tam_codigo = (int)(vmx->memoria.tabla_segmentos[0] & 0xFFFF);
+    int tam_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
     char buffer[128];
 
     while (dir < tam_codigo) {
@@ -201,72 +204,5 @@ void desensamblar_programa(Vmx *vmx) {
         if (cant_bytes <= 0) break;
         printf("%s\n", buffer);
         dir += cant_bytes;
-    }
-}
-
-void desensamblar_instruccion(Vmx *vmx, char buffer[], int tam_buffer) {
-    int opc;
-    int tipo_a;
-    int32_t dato_a;
-    int tipo_b;
-    int32_t dato_b;
-    char op_a_str[64];
-    char op_b_str[64];
-    const char *mnem;
-    int dir_instruccion;
-
-    opc = (int)vmx->registros[OPC];
-    tipo_a = get_tipo(vmx->registros[OP1]);
-    dato_a = get_dato(vmx->registros[OP1]);
-    tipo_b = get_tipo(vmx->registros[OP2]);
-    dato_b = get_dato(vmx->registros[OP2]);
-
-    mnem = obtener_mnemonico(opc);
-
-    formatear_operando(op_a_str, tipo_a, dato_a);
-    formatear_operando(op_b_str, tipo_b, dato_b);
-
-    // Calcula el tamano de la instruccion segun sus operandos
-    int cant_bytes = 1;
-    if (opc != OP_STOP) {
-        switch (tipo_a) {
-            case TIPO_REGISTRO:  cant_bytes += 1; break;
-            case TIPO_INMEDIATO: cant_bytes += 2; break;
-            case TIPO_MEMORIA:   cant_bytes += 3; break;
-            default: break;
-        }
-        if (opc > 0x0A) { // Si el operador es mayor a 0x0A, es una operacion con mas de un operando
-            switch (tipo_b) {
-                case TIPO_REGISTRO:  cant_bytes += 1; break;
-                case TIPO_INMEDIATO: cant_bytes += 2; break;
-                case TIPO_MEMORIA:   cant_bytes += 3; break;
-                default: break;
-            }
-        }
-    }
-
-    // Si IP ya fue avanzado por el decodificador, la instruccion comenzo en IP - cant_bytes
-    int ip_actual = (int)(vmx->registros[IP] & 0xFFFF);
-    if (ip_actual >= cant_bytes) {
-        dir_instruccion = ip_actual - cant_bytes;
-    } else {
-        dir_instruccion = ip_actual;
-    }
-
-    // Formatea los bytes en hexadecimal
-    char bytes_hex[32] = "";
-    char byte_str[8];
-    int i;
-    for (i = 0; i < cant_bytes && (dir_instruccion + i) < 16384; i++) {
-        sprintf(byte_str, "%02X ", vmx->memoria.mem_principal[dir_instruccion + i]);
-        strcat(bytes_hex, byte_str);
-    }
-
-    if (opc == OP_STOP) {
-        snprintf(buffer, tam_buffer, "[%04X] %-18s | %s", dir_instruccion, bytes_hex, mnem);
-    } else if (opc <= 0x0A) {
-        snprintf(buffer, tam_buffer, "[%04X] %-18s | %s %s", dir_instruccion, bytes_hex, mnem, op_a_str);
-    } else {
-        snprintf(buffer, tam_buffer, "[%04X] %-18s | %s %s, %s", dir_instruccion, bytes_hex, mnem, op_a_str, op_b_str);
     }
 }

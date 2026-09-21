@@ -20,13 +20,13 @@
 // Toma el valor de tamano de codigo dado y la constante de tamano de MEM PRINCIPAL
 // y lo usa para calcular la tabla de segmentos (codigo y datos)
 void setear_tabla_segmento(Memoria *mem, int tamCS) {
-    int16_t inicio_cs = 0;
-    int16_t fin_cs = tamCS;
-    int16_t inicio_ds = fin_cs;
-    int16_t fin_ds = TAM_MEMORIA_PRINCIPAL - fin_cs; // Es en realidad el tamaño del data segment
+    int inicio_cs = 0;
+    int fin_cs = tamCS;
+    int inicio_ds = fin_cs;
+    int fin_ds = TAM_MEMORIA_PRINCIPAL - fin_cs; // Es en realidad el tamaño del data segment
 
-    mem->tabla_segmentos[0] = ((uint32_t)inicio_cs << 16) | ((uint32_t)fin_cs & 0xFFFF);
-    mem->tabla_segmentos[1] = ((uint32_t)inicio_ds << 16) | ((uint32_t)fin_ds & 0xFFFF);
+    mem->tabla_segmentos[0] = ((uint32_t)inicio_cs << 16) | (fin_cs & 0xFFFF);
+    mem->tabla_segmentos[1] = ((uint32_t)inicio_ds << 16) | (fin_ds & 0xFFFF);
 
     int i;
     for (i = 2; i < TAM_SEGMENTOS; i++) {
@@ -135,7 +135,7 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
 
     // Configura la tabla de descriptores de segmentos:
     // Entrada 0 (Codigo): Base = 0, Tamano = tamCS
-    vmx->memoria.tabla_segmentos[0] = (uint32_t)tamCS & 0xFFFF;
+    vmx->memoria.tabla_segmentos[0] = tamCS & 0xFFFF;
 
     // Entrada 1 (Datos): Base = tamCS, Tamano = 16384 - tamCS
     vmx->memoria.tabla_segmentos[1] = ((uint32_t)tamCS << 16) | (16384 - tamCS);

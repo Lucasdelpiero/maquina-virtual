@@ -19,8 +19,4 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
 // Recorre secuencialmente el segmento de codigo e imprime el desensamblado completo (1 vez por instruccion)
 void desensamblar_programa(Vmx *vmx);
 
-// Desensambla la instruccion actual y formatea la linea completa en el buffer provisto
-// Formato: [XXXX] XX XX ... | MNEM OP_A, OP_B
-void desensamblar_instruccion(Vmx *vmx, char buffer[], int tam_buffer);
-
 #endif // DISASSEMBLER_H
