@@ -14,7 +14,6 @@
 */
 
 // Funciones de carga y configuracion de segmentos
-int leer_archivo(char archNom[], Memoria *mem);
 void setear_tabla_segmento(Memoria *mem, int tamCS);
 
 // Funciones del subsistema principal Vmx
