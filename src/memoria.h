@@ -16,8 +16,9 @@ typedef struct {
 // Funciones de manipulacion de memoria
 void inicializar_memoria(Memoria *mem);
 void escribir_byte(Memoria *mem, int pos, uint8_t dato);
-int32_t get_dir_fisica(Memoria mem, int32_t dir_logica);
-int32_t get_valor_memoria(Memoria mem, int32_t dir_logica, int cant_accedidos);
+int32_t get_dir_fisica(Memoria *mem, int32_t dir_logica);
+void set_registros_memoria(Memoria *mem, int32_t dir_logica, int cant_accedidos, int32_t dir_fisica, int32_t valor);
+int32_t get_valor_memoria(Memoria *mem, int32_t dir_logica, int cant_accedidos);
 int32_t set_valor_memoria(Memoria *mem, int32_t dir_logica, int32_t dato, int cant_accedidos);
 
 // Interfaz de memoria de la maquina virtual

@@ -39,3 +39,5 @@ $RECYCLE.BIN/
 *.tmp
 
 /temp
+
+/docs/documentacion_espejo/.obsidian

@@ -4,7 +4,7 @@
 
 // Extrae los 8 bits superiores (tipo de operando)
 int get_tipo(int32_t operando) {
-    return (int)((operando >> 24) & 0xFF);
+    return (operando >> 24) & 0xFF;
 }
 
 // Extrae los 24 bits inferiores (dato del operando)
@@ -23,54 +23,67 @@ int32_t extender_signo_16_a_32(uint16_t valor16) {
     return (int32_t)valor16;
 }
 
-// Se usa exclusivamente cuando el operando es de memoria, en otros casos se accede directamente al registro.
-// Resuelve una direccion de memoria: registro base + desplazamiento con signo
-uint16_t resolver_direccion_memoria(Vmx *vmx, int32_t dato) {
+// Calcula la direccion logica de memoria: registro base + desplazamiento con signo
+int32_t calcular_direccion_logica_memoria(Vmx *vmx, int32_t dato) {
     int cod_reg;
     uint16_t offset_crudo;
     int32_t offset;
     int32_t dir_base;
+    int segmento;
+    int offset_base;
+    int offset_total;
     int32_t dir_logica;
-    uint16_t dir_fisica;
 
     /* Dato esta armado asi en este caso, por ser un operando de memoria
      31                24 23                 8 7       5 4         0
     ┌────────────────────┬────────────────────┬─────────┬───────────┐
-    │     (sin uso, 0)   │  Offset (16 bits)  │ (ceros) │  Cod Reg  │
-    │                    │                    │         │  (5 bits) │
+     │     (sin uso, 0)   │  Offset (16 bits)  │ (ceros) │  Cod Reg  │
+     │                    │                    │         │  (5 bits) │
     └────────────────────┴────────────────────┴─────────┴───────────┘
     */
-    cod_reg = dato & 0x1F; // Los operadores de memoria tienen el codigo registro, que tiene 5 bits, aqui accedemos a el.
-    offset_crudo = (uint16_t)((dato >> 8) & 0xFFFF);
+    cod_reg = dato & 0x1F;
+    offset_crudo = (dato >> 8) & 0xFFFF;
     offset = extender_signo_16_a_32(offset_crudo);
-    dir_base = vmx->registros[cod_reg]; // Obtenemos la direccion base del registro
-    dir_logica = dir_base + offset;
+    dir_base = vmx->registros[cod_reg];
 
-    // Carga LAR, traduce direccion física y actualiza MAR
-    vmx->registros[LAR] = dir_logica;
-    dir_fisica = traducir_direccion(&vmx->memoria, dir_logica, 4);
-    vmx->registros[MAR] = ((uint32_t)4 << 16) | ((uint32_t)dir_fisica & 0xFFFF);
+    // Separamos la direccion base en codigo de segmento y desplazamiento base
+    segmento = (dir_base >> 16) & 0xFFFF;
+    offset_base = dir_base & 0xFFFF;
 
-    logger("[OPERANDO] Memoria resuelta: reg=%d offset=%d dir_logica=0x%08X -> dir_fisica=0x%04X | LAR=0x%08X MAR=0x%08X\n",
-           cod_reg, offset, dir_logica, dir_fisica, vmx->registros[LAR], vmx->registros[MAR]);
+    // Calculamos el desplazamiento final dentro del segmento
+    offset_total = offset_base + offset;
 
-    return dir_fisica;
+    // Si el desplazamiento total es negativo, queda fuera del inicio del segmento
+    if (offset_total < 0) {
+        logger("[ERROR][OPERANDO] Desplazamiento negativo fuera de segmento: base=%d, offset=%d (total=%d)\n",
+               offset_base, offset, offset_total);
+        vmx->abortar("Fallo de segmento: acceso fuera de los limites del segmento.");
+        return 0;
+    }
+
+    // Armamos la direccion logica: 16 bits altos = segmento, 16 bits bajos = desplazamiento
+    dir_logica = (segmento << 16) + offset_total;
+
+    return dir_logica;
+}
+
+// Resuelve una direccion de memoria traduciendo la direccion logica a fisica
+uint16_t resolver_direccion_memoria(Vmx *vmx, int32_t dato) {
+    int32_t dir_logica = calcular_direccion_logica_memoria(vmx, dato);
+    return traducir_direccion(&vmx->memoria, dir_logica, 4);
 }
 
 // Obtiene el valor numerico de 32 bits del operando
 int32_t get_valor(Vmx *vmx, int tipo, int32_t dato) {
-    uint16_t pos_fisica;
-
     if (tipo == TIPO_REGISTRO) { //dato contiene el valor el registro operando (OP1/OP2)
         return vmx->registros[dato & 0x1F]; // Al ser operando de tipo registro, se guarda el indice/codigo del registro en los 5 bits menos significativos, luego de esto accedemos al dato directamente.
     }
     if (tipo == TIPO_INMEDIATO) { // En este caso dato contendra una constante de 16 bits con el valor directamente
-        return extender_signo_16_a_32((uint16_t)(dato & 0xFFFF));
+        return extender_signo_16_a_32(dato & 0xFFFF);
     }
     if (tipo == TIPO_MEMORIA) {
-        pos_fisica = resolver_direccion_memoria(vmx, dato); //Obtenemos la memoria fisica desde la dinamica para poder acceder
-        vmx->registros[MBR] = leer_memoria(&vmx->memoria, pos_fisica, 4);
-        return vmx->registros[MBR];
+        int32_t dir_logica = calcular_direccion_logica_memoria(vmx, dato);
+        return get_valor_memoria(&vmx->memoria, dir_logica, 4);
     }
 
     logger("[ERROR][OPERANDO] Tipo de operando invalido al leer valor: tipo=%d, dato=0x%06X\n", tipo, dato);
@@ -80,15 +93,12 @@ int32_t get_valor(Vmx *vmx, int tipo, int32_t dato) {
 
 // Guarda un valor de 32 bits en el destino (registro o memoria)
 void set_valor(Vmx *vmx, int tipo, int32_t dato, int32_t valor) {
-    uint16_t pos_fisica;
-
     if (tipo == TIPO_REGISTRO) {
         vmx->registros[dato & 0x1F] = valor; // Idem a lo explicado antes pero ahora seteamos
         logger("[OPERANDO] Registro r%d <= %d (0x%08X)\n", dato & 0x1F, valor, valor);
     } else if (tipo == TIPO_MEMORIA) {
-        pos_fisica = resolver_direccion_memoria(vmx, dato);
-        vmx->registros[MBR] = valor;
-        escribir_memoria(&vmx->memoria, pos_fisica, 4, valor);
+        int32_t dir_logica = calcular_direccion_logica_memoria(vmx, dato);
+        set_valor_memoria(&vmx->memoria, dir_logica, valor, 4);
     } else if (tipo == TIPO_INMEDIATO) {
         logger("[ERROR][OPERANDO] Intento de escribir en operando inmediato: dato=0x%06X, valor=%d (0x%08X)\n", dato, valor, valor);
         vmx->abortar("Error: Intento de escribir en operando inmediato.");
@@ -114,10 +124,10 @@ void combinar_mitad(Vmx *vmx, int tipo, int32_t dato, uint16_t mitad_nueva, int 
 
     if (cargar_alta) {
         // LDH: carga los 16 bits altos preservando los 16 bits bajos
-        combinado = (actual & 0x0000FFFF) | ((int32_t)mitad_nueva << 16); //movemos lo nuevo a los altos y reesguardamos lo actual en los bajos
+        combinado = (actual & 0x0000FFFF) | ((uint32_t)mitad_nueva << 16);
     } else {
         // LDL: carga los 16 bits bajos preservando los 16 bits altos
-        combinado = (actual & (int32_t)0xFFFF0000) | (uint16_t)mitad_nueva;
+        combinado = (actual & 0xFFFF0000) | mitad_nueva;
     }
 
     logger("[OPERANDO] Combinar mitad (%s): anterior=0x%08X, mitad_nueva=0x%04X => nuevo=0x%08X\n",

@@ -32,7 +32,7 @@ void actualizar_cc(Vmx *vmx, int32_t resultado, int carry, int overflow) {
     v = overflow ? 1 : 0;
 
     // Empaqueta los 4 flags en los 4 bits mas significativos; bits 0..27 quedan en cero
-    vmx->registros[CC] = (int32_t)((n << 31) | (z << 30) | (c << 29) | (v << 28));
+    vmx->registros[CC] = (n << 31) | (z << 30) | (c << 29) | (v << 28);
 }
 
 // Macro auxiliar para imprimir el log de una operacion aritmetica o logica
@@ -44,7 +44,7 @@ static void log_operacion_2(char nombre[], int32_t a, int32_t b, int32_t res, in
 
 // Realiza un salto sumando el offset al segmento de codigo (CS)
 static void ejecutar_salto(Vmx *vmx, int32_t offset) {
-    int tam_codigo = (int)(vmx->memoria.tabla_segmentos[0] & 0xFFFF);
+    int tam_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
     vmx->registros[IP] = vmx->registros[CS] + offset;
     logger("[EXEC] Salto ejecutado -> IP=0x%08X (offset=%d)\n", vmx->registros[IP], offset);
     if (offset < 0 || offset >= tam_codigo) {
@@ -220,7 +220,7 @@ void op_add(Vmx *vmx) {
 
     uint32_t op_a = a;
     uint32_t op_b = b;
-    uint64_t suma_sin_signo = (uint64_t)op_a + op_b;
+    uint64_t suma_sin_signo = (uint64_t)op_a + op_b; // Solo casteamos uno, el otro se castea automaticamente por el operador suma
     int carry = (suma_sin_signo > UINT32_MAX);
 
     int64_t suma_con_signo = (int64_t)a + (int64_t)b;
@@ -269,7 +269,7 @@ void op_mul(Vmx *vmx) {
     uint64_t prod_sin_signo = (uint64_t)op_a * op_b;
     int carry = (prod_sin_signo > UINT32_MAX);
 
-    int32_t res = (int32_t)prod_con_signo;
+    int32_t res = prod_con_signo;
 
     actualizar_cc(vmx, res, carry, overflow);
     set_valor(vmx, tipo_a, dato_a, res);
@@ -382,14 +382,20 @@ void op_swap(Vmx *vmx) {
     int tipo_b = get_tipo(vmx->registros[OP2]);
     int32_t dato_b = get_dato(vmx->registros[OP2]);
 
+    if (tipo_a == TIPO_INMEDIATO || tipo_b == TIPO_INMEDIATO) {
+        logger("[ERROR][EXEC] Intento de SWAP con operando inmediato: tipo_a=%d, tipo_b=%d\n", tipo_a, tipo_b);
+        vmx->abortar("Error: SWAP requiere operandos de tipo registro o memoria.");
+        return;
+    }
+
     int32_t a = get_valor(vmx, tipo_a, dato_a);
     int32_t b = get_valor(vmx, tipo_b, dato_b);
 
     set_valor(vmx, tipo_a, dato_a, b);
     set_valor(vmx, tipo_b, dato_b, a);
 
-    // SWAP afecta a CC de la misma manera que el ultimo XOR entre ellos
-    actualizar_cc(vmx, a, 0, 0);
+    // SWAP afecta a CC de la misma manera que el ultimo XOR entre ellos (el nuevo valor de opA, que es b)
+    actualizar_cc(vmx, b, 0, 0);
     logger("[EXEC] SWAP: intercambiados opA=%d y opB=%d [CC afectado como XOR: N=%d Z=%d C=0 V=0]\n",
            b, a, FLAG_N(vmx->registros[CC]), FLAG_Z(vmx->registros[CC]));
 }
@@ -408,25 +414,32 @@ void op_shl(Vmx *vmx) {
     int i;
     uint32_t u_a = a;
 
-    if (b > 0) {
-        if (b >= 32) {
-            carry = (a != 0);
-            res = 0;
-        } else {
-            // Deteccion de acarreo bit a bit si se pierde algun bit en uno
-            i = 0;
-            while (i < b && carry == 0) {
-                if ((u_a >> (31 - i)) & 1) {
-                    carry = 1;
-                }
-                i++;
+    if (b < 0) {
+        logger("[ERROR][EXEC] SHL con cantidad de corrimientos negativa: b=%d\n", b);
+        vmx->abortar("Error: Cantidad de corrimientos negativa en instruccion SHL.");
+        return;
+    }
+
+    if (b == 0) {
+        res = a;
+        carry = 0;
+        overflow = 0;
+    } else if (b >= 32) {
+        carry = (a != 0);
+        res = 0;
+        overflow = (a != 0);
+    } else {
+        // Deteccion de acarreo bit a bit si se pierde algun bit en uno
+        i = 0;
+        while (i < b && carry == 0) {
+            if ((u_a >> (31 - i)) & 1) {
+                carry = 1;
             }
-            res = (int32_t)(u_a << b);
+            i++;
         }
+        res = (int32_t)(u_a << b);
         int64_t shift_64 = (int64_t)a << (b < 63 ? b : 63);
         overflow = (shift_64 < INT32_MIN || shift_64 > INT32_MAX);
-    } else {
-        res = a;
     }
 
     actualizar_cc(vmx, res, carry, overflow);
@@ -450,31 +463,36 @@ void op_shr(Vmx *vmx) {
     uint32_t u_a = a;
     uint32_t temp;
 
-    if (b > 0) {
-        if (b >= 32) {
-            carry = (a != 0);
-            res = 0;
-        } else {
-            // Deteccion de acarreo bit a bit si se pierde algun bit en uno
-            i = 0;
-            while (i < b && carry == 0) {
-                if ((u_a >> i) & 1) {
-                    carry = 1;
-                }
-                i++;
-            }
-            // Reconstruccion del valor desplazado bit a bit
-            n = 32 - b;
-            temp = u_a >> b;
-            for (i = 0; i < n; i++) {
-                aux = temp & 1;
-                aux = aux << i;
-                res += aux;
-                temp = temp >> 1;
-            }
-        }
-    } else {
+    if (b < 0) {
+        logger("[ERROR][EXEC] SHR con cantidad de corrimientos negativa: b=%d\n", b);
+        vmx->abortar("Error: Cantidad de corrimientos negativa en instruccion SHR.");
+        return;
+    }
+
+    if (b == 0) {
         res = a;
+        carry = 0;
+    } else if (b >= 32) {
+        carry = (a != 0);
+        res = 0;
+    } else {
+        // Deteccion de acarreo bit a bit si se pierde algun bit en uno
+        i = 0;
+        while (i < b && carry == 0) {
+            if ((u_a >> i) & 1) {
+                carry = 1;
+            }
+            i++;
+        }
+        // Reconstruccion del valor desplazado bit a bit
+        n = 32 - b;
+        temp = u_a >> b;
+        for (i = 0; i < n; i++) {
+            aux = temp & 1;
+            aux = aux << i;
+            res += aux;
+            temp = temp >> 1;
+        }
     }
 
     actualizar_cc(vmx, res, carry, 0);
@@ -495,22 +513,27 @@ void op_sar(Vmx *vmx) {
     int i;
     uint32_t u_a = a;
 
-    if (b > 0) {
-        if (b >= 32) {
-            carry = (a < 0) ? 1 : (a != 0);
-            res = (a < 0) ? -1 : 0;
-        } else {
-            i = 0;
-            while (i < b && carry == 0) {
-                if ((u_a >> i) & 1) {
-                    carry = 1;
-                }
-                i++;
-            }
-            res = a >> b;
-        }
-    } else {
+    if (b < 0) {
+        logger("[ERROR][EXEC] SAR con cantidad de corrimientos negativa: b=%d\n", b);
+        vmx->abortar("Error: Cantidad de corrimientos negativa en instruccion SAR.");
+        return;
+    }
+
+    if (b == 0) {
         res = a;
+        carry = 0;
+    } else if (b >= 32) {
+        carry = (a < 0) ? 1 : (a != 0);
+        res = (a < 0) ? -1 : 0;
+    } else {
+        i = 0;
+        while (i < b && carry == 0) {
+            if ((u_a >> i) & 1) {
+                carry = 1;
+            }
+            i++;
+        }
+        res = a >> b;
     }
 
     actualizar_cc(vmx, res, carry, 0);
@@ -558,7 +581,11 @@ void op_rnd(Vmx *vmx) {
     int32_t res;
 
     // RND: numero aleatorio entre 0 y operando B; no modifica CC
-    if (b <= 0) {
+    if (b < 0) {
+        logger("[ERROR][EXEC] RND con limite negativo: b=%d\n", b);
+        vmx->abortar("Error: Limite superior negativo en instruccion RND.");
+        return;
+    } else if (b == 0) {
         res = 0;
     } else {
         res = rand() % (b + 1);

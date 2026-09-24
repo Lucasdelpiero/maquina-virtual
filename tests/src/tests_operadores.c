@@ -1,6 +1,17 @@
 #include "tests_helpers.h"
 #include "../../src/operadores.h"
 #include "../../src/operandos.h"
+#include "../../src/errores.h"
+#include <setjmp.h>
+
+static jmp_buf s_jmp_abort;
+static int s_abort_llamado = 0;
+
+static void mock_abortar_operadores(char mensaje[]) {
+    (void)mensaje;
+    s_abort_llamado = 1;
+    longjmp(s_jmp_abort, 1);
+}
 
 // Helper para configurar OP1 u OP2 en registros
 static void set_operando_reg(Vmx *vmx, int reg_op, int tipo, int32_t dato) {
@@ -141,4 +152,186 @@ void correr_tests_operadores(void) {
     // Test STOP
     op_stop(&vmx);
     assert_registro(&vmx, IP, -1, "STOP fija IP = -1");
+
+    // 13. Tests de validacion de corrimientos negativos y limites invalidos
+    set_abortar_handler(mock_abortar_operadores);
+
+    // SHL con corrimiento negativo
+    vmx.registros[EAX] = 10;
+    vmx.registros[EBX] = -1;
+    set_operando_reg(&vmx, OP1, TIPO_REGISTRO, EAX);
+    set_operando_reg(&vmx, OP2, TIPO_REGISTRO, EBX);
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_shl(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "SHL con cantidad de corrimientos negativa aborta");
+
+    // SHR con corrimiento negativo
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_shr(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "SHR con cantidad de corrimientos negativa aborta");
+
+    // SAR con corrimiento negativo
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_sar(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "SAR con cantidad de corrimientos negativa aborta");
+
+    // RND con limite negativo
+    vmx.registros[EBX] = -5;
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_rnd(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "RND con limite superior negativo aborta");
+
+    // RND con limite 0 genera 0 sin abortar
+    vmx.registros[EBX] = 0;
+    op_rnd(&vmx);
+    assert_registro(&vmx, EAX, 0, "RND con limite 0 genera 0");
+
+    // Division por cero aborta
+    vmx.registros[EAX] = 10;
+    vmx.registros[EBX] = 0;
+    set_operando_reg(&vmx, OP1, TIPO_REGISTRO, EAX);
+    set_operando_reg(&vmx, OP2, TIPO_REGISTRO, EBX);
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_div(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "op_div: Division por cero aborta");
+
+    // SWAP con operando A inmediato aborta
+    set_operando_reg(&vmx, OP1, TIPO_INMEDIATO, 10);
+    set_operando_reg(&vmx, OP2, TIPO_REGISTRO, EBX);
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_swap(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "op_swap: Operando A inmediato aborta");
+
+    // SWAP con operando B inmediato aborta
+    set_operando_reg(&vmx, OP1, TIPO_REGISTRO, EAX);
+    set_operando_reg(&vmx, OP2, TIPO_INMEDIATO, 10);
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        op_swap(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "op_swap: Operando B inmediato aborta");
+
+    // SWAP actualiza CC con el nuevo valor de operando A
+    vmx.registros[EAX] = 50;
+    vmx.registros[EBX] = -10;
+    set_operando_reg(&vmx, OP1, TIPO_REGISTRO, EAX);
+    set_operando_reg(&vmx, OP2, TIPO_REGISTRO, EBX);
+    op_swap(&vmx);
+    assert_registro(&vmx, EAX, -10, "op_swap: EAX recibe -10");
+    assert_registro(&vmx, EBX, 50, "op_swap: EBX recibe 50");
+    assert_cc(&vmx, 1, 0, 0, 0, "op_swap: CC actualizado con el nuevo valor de EAX (-10 -> N=1)");
+
+    // Instruccion invalida en ejecutar_instruccion aborta
+    vmx.registros[OPC] = 0x0B; // Codigo reservado/NULL
+    s_abort_llamado = 0;
+    if (setjmp(s_jmp_abort) == 0) {
+        ejecutar_instruccion(&vmx);
+    }
+    ASSERT(s_abort_llamado == 1, "ejecutar_instruccion: Opcode reservado 0x0B aborta");
+
+    // 14. Cobertura de todos los saltos condicionales
+    vmx.registros[CS] = 0;
+
+    // JN: salta si N=1 y Z=0
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = (1u << 31); // N=1, Z=0
+    set_operando_reg(&vmx, OP1, TIPO_INMEDIATO, 20);
+    op_jn(&vmx);
+    assert_registro(&vmx, IP, 20, "op_jn: Salta cuando N=1");
+
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = 0; // N=0
+    op_jn(&vmx);
+    assert_registro(&vmx, IP, 0, "op_jn: No salta cuando N=0");
+
+    // JP: salta si N=0 y Z=0
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = 0; // N=0, Z=0
+    set_operando_reg(&vmx, OP1, TIPO_INMEDIATO, 25);
+    op_jp(&vmx);
+    assert_registro(&vmx, IP, 25, "op_jp: Salta cuando N=0 y Z=0");
+
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = (1u << 30); // Z=1
+    op_jp(&vmx);
+    assert_registro(&vmx, IP, 0, "op_jp: No salta cuando Z=1");
+
+    // JC: salta si C=1
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = (1u << 29); // C=1
+    set_operando_reg(&vmx, OP1, TIPO_INMEDIATO, 30);
+    op_jc(&vmx);
+    assert_registro(&vmx, IP, 30, "op_jc: Salta cuando C=1");
+
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = 0; // C=0
+    op_jc(&vmx);
+    assert_registro(&vmx, IP, 0, "op_jc: No salta cuando C=0");
+
+    // JV: salta si V=1
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = (1u << 28); // V=1
+    set_operando_reg(&vmx, OP1, TIPO_INMEDIATO, 35);
+    op_jv(&vmx);
+    assert_registro(&vmx, IP, 35, "op_jv: Salta cuando V=1");
+
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = 0; // V=0
+    op_jv(&vmx);
+    assert_registro(&vmx, IP, 0, "op_jv: No salta cuando V=0");
+
+    // JNP: salta si N=1 o Z=1 (<= 0)
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = (1u << 30); // Z=1
+    set_operando_reg(&vmx, OP1, TIPO_INMEDIATO, 40);
+    op_jnp(&vmx);
+    assert_registro(&vmx, IP, 40, "op_jnp: Salta cuando Z=1");
+
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = (1u << 31); // N=1
+    op_jnp(&vmx);
+    assert_registro(&vmx, IP, 40, "op_jnp: Salta cuando N=1");
+
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = 0; // N=0, Z=0
+    op_jnp(&vmx);
+    assert_registro(&vmx, IP, 0, "op_jnp: No salta cuando N=0 y Z=0");
+
+    // JNN: salta si N=0 (>= 0)
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = 0; // N=0
+    set_operando_reg(&vmx, OP1, TIPO_INMEDIATO, 45);
+    op_jnn(&vmx);
+    assert_registro(&vmx, IP, 45, "op_jnn: Salta cuando N=0");
+
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = (1u << 31); // N=1
+    op_jnn(&vmx);
+    assert_registro(&vmx, IP, 0, "op_jnn: No salta cuando N=1");
+
+    // JNZ: salta si Z=0 (!= 0)
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = 0; // Z=0
+    set_operando_reg(&vmx, OP1, TIPO_INMEDIATO, 50);
+    op_jnz(&vmx);
+    assert_registro(&vmx, IP, 50, "op_jnz: Salta cuando Z=0");
+
+    vmx.registros[IP] = 0;
+    vmx.registros[CC] = (1u << 30); // Z=1
+    op_jnz(&vmx);
+    assert_registro(&vmx, IP, 0, "op_jnz: No salta cuando Z=1");
+
+    set_abortar_handler(NULL);
 }

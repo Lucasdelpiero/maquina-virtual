@@ -17,10 +17,12 @@ Write-Host "==================================================" -ForegroundColor
 # 1. Localizar ejecutable vmx.exe
 $vmxCandidates = @(
     $VmxPath,
+    (Join-Path $rootDir "bin\vmx.exe"),
     (Join-Path $rootDir "vmx.exe"),
     (Join-Path $rootDir "bin\Debug\proyecto-maquina-virtual.exe"),
     (Join-Path $rootDir "bin\Release\proyecto-maquina-virtual.exe"),
-    (Join-Path (Get-Location) "vmx.exe")
+    (Join-Path (Get-Location) "vmx.exe"),
+    (Join-Path (Get-Location) "bin\vmx.exe")
 )
 
 $vmxExe = $null

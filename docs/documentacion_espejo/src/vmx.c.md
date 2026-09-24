@@ -1,27 +1,17 @@
-#include "vmx.h"
-#include "decodificador.h"
-#include "disassembler.h"
-#include "logger.h"
-#include <stdio.h>
-#include <stddef.h>
+## int ip_valido(Vmx \*vmx) {
 
-// Definicion de la tabla de operaciones (inicializada en NULL)
-FuncionOperacion tabla_operaciones[32] = {NULL};
+Esta funcion valida que el ip sea valido, puede no ser valido al encontrar un STOP o por un error.
 
-// Valida si el registro IP apunta dentro del segmento de codigo
-int ip_valido(Vmx *vmx) {
-    int segmento;
-    int offset;
-    int tamano_codigo;
-
-    // Si IP es -1 (0xFFFFFFFF), finaliza la ejecucion normalmente (ejecuto STOP)
+```c
     if (vmx->registros[IP] == -1) {
         logger("[VMX] Ciclo detenido: IP = -1 (STOP detectado).\n");
         return 0;
     }
+```
 
-    // IP es una direccion logica: 16 bits altos = segmento, 16 bits bajos = offset
-    // Lo que debemos validar es que el segmento sea cero en este caso, porque queremos acceder al codigo
+Si la IP es -1 terminamos la ejecucion, retornamos 0 y quien llama a la funcion se encarga de cortar el programa.
+
+```c
     segmento = (vmx->registros[IP] >> 16) & 0xFFFF;
     offset = vmx->registros[IP] & 0xFFFF;
 
@@ -31,36 +21,29 @@ int ip_valido(Vmx *vmx) {
                segmento, vmx->registros[IP]);
         return 0;
     }
+```
 
+Validamos en el registro IP de los registros, el valor del ip, asi como el LAR y demas cosas, en los 2 bytes altos se guarda el segmento y en los bajos el desplazamiento en este caso.
+
+Si el segmento no es cero, debemos abortar porque el segmento debe ser el cero.
+
+```c
     // El tamano del codigo esta almacenado en los 16 bits bajos de tabla_segmentos[0]
-    tamano_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
+    tamano_codigo = (int)(vmx->memoria.tabla_segmentos[0] & 0xFFFF);
 
-    /*
-        IP = 0x0000 0004
-            │       │
-      ┌─────┘       └────────┐
-      ▼                      ▼
-    Segmento = 0            Offset = 4
-      │
-      ▼ (Busca en tabla)
-    tabla_segmentos[0] ───► Base = 0, Límite = 100
-                         │
-                         ▼
-        Dirección Física = Base + Offset
-                         = 0 + 4
-                         = 4  ──► memoria[4] (Próxima instrucción)
-    */
     // Valida que el offset este estrictamente dentro de los limites del segmento de codigo
     if (offset < 0 || offset >= tamano_codigo) {
         logger("[VMX] Ciclo detenido: IP fuera de los limites del segmento de codigo (offset=%d, tamano_codigo=%d). IP=0x%08X\n",
                offset, tamano_codigo, vmx->registros[IP]);
         return 0;
     }
+```
 
-    return 1;
-}
+Si la base mas el offset exede el tamaño del segmento, tambien debemos cortar, es un error.
 
-// Fija la instruccion cargada en el registro OPC
+### Ejecutar Instruccion
+
+```c
 void ejecutar_instruccion(Vmx *vmx) {
     int opc;
 
@@ -80,7 +63,13 @@ void ejecutar_instruccion(Vmx *vmx) {
     // Fijar directo a la operacion correspondiente
     tabla_operaciones[opc](vmx);
 }
+```
 
+Para ejecutar una instruccion, nos fijamos el registro opc, validamos que sea valido y luego directamente ejecutamos la funcion asociada al codigo, desde el array de punteros a funciones.
+
+## Ciclo principal
+
+```c
 // Ciclo principal de ejecucion: busqueda, decodificacion y ejecucion
 void ejecutar_vmx(Vmx *vmx) {
     logger("[VMX] Iniciando ciclo de ejecucion.\n");
@@ -95,3 +84,6 @@ void ejecutar_vmx(Vmx *vmx) {
 
     logger("[VMX] Ciclo de ejecucion finalizado.\n");
 }
+```
+
+Mientras la instruccion siga siendo valida, vamos decodificando desde la memoria y vamos ejecutando cada instruccion.

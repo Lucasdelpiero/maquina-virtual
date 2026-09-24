@@ -21,6 +21,9 @@ int32_t get_dato(int32_t operando);
 // Extiende el signo de un valor de 16 bits en complemento a dos hacia 32 bits
 int32_t extender_signo_16_a_32(uint16_t valor16);
 
+// Calcula la direccion logica combinando el registro base y el desplazamiento con signo
+int32_t calcular_direccion_logica_memoria(Vmx *vmx, int32_t dato);
+
 // Resuelve la direccion fisica combinando el registro base y el desplazamiento con signo
 uint16_t resolver_direccion_memoria(Vmx *vmx, int32_t dato);
 

@@ -21,7 +21,7 @@ static void mock_abortar(char mensaje[]) {
 }
 
 // Helper para resolver la ruta del archivo .vmx segun desde donde se ejecute el runner
-static void resolver_ruta_vmx(const char *relativa, char ruta_final[]) {
+static void resolver_ruta_vmx(const char relativa[], char ruta_final[]) {
     FILE *f = fopen(relativa, "rb");
     if (f != NULL) {
         fclose(f);
