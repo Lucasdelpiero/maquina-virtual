@@ -146,6 +146,12 @@ void op_sys(Vmx *vmx) {
     cantidad = vmx->registros[ECX] & 0xFFFF;
     tamanio = (vmx->registros[ECX] >> 16) & 0xFFFF;
 
+    if (tamanio == 15 || num_sys == 15) {
+        printf("Num sis: %d \n", num_sys);
+        printf("linea invalida\n");
+        return;
+    }
+
     if (tamanio <= 0 || tamanio > 4) {
         logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);
         vmx->abortar("Error: Tamano invalido en SYS.");
@@ -195,7 +201,8 @@ void op_sys(Vmx *vmx) {
             logger("[SYS] WRITE celda %d: DirLogica=0x%08X DirFisica=0x%04X Valor=%d\n",
                    i, dir_logica, dir_fisica, valor);
         }
-    } else {
+    }
+    else {
         logger("[ERROR][SYS] Llamada al sistema invalida o no implementada: num_sys=%d (solo se soportan 1=READ y 2=WRITE)\n", num_sys);
         vmx->abortar("Error: Llamada al sistema (SYS) invalida o no implementada.");
     }
