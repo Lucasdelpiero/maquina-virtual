@@ -16,7 +16,7 @@ void set_registros_memoria(Memoria *mem, int32_t dir_logica, int cant_accedidos,
 }
 ```
 
-LAR guarda la memoria logica accedida y MAR guarda la direccion fisica accedida en los 4 bytes altos y la dir fisica accedida en los bytes bajos.
+LAR guarda la memoria logica accedida y MAR guarda la direccion fisica accedida en los 2 bytes altos y la dir fisica accedida en los bytes bajos.
 
 Aclarar que el `+` funciona como un OR en este caso, fijando la dir fisica en los bytes bajos.
 
