@@ -193,6 +193,76 @@ void op_not(Vmx *vmx) {
            a, a, res, res, FLAG_N(vmx->registros[CC]), FLAG_Z(vmx->registros[CC]));
 }
 
+// --- Gestion de la pila ---
+
+void op_push(Vmx *vmx) {
+    int tipo_a = get_tipo(vmx->registros[OP1]);
+    int32_t dato_a = get_dato(vmx->registros[OP1]);
+
+    // Primero decrementar SP
+    vmx->registros[SP] -= 4;
+
+    // Verificar STACK OVERFLOW
+    if (vmx->registros[SP] < vmx->registros[SS]) {
+        logger("[ERROR][PILA] STACK OVERFLOW.\n");
+        vmx->abortar("Error: STACK OVERFLOW.");
+        return;
+    }
+
+    int32_t valor = get_valor(vmx, tipo_a, dato_a);
+
+    // Traducir dirección lógica a física
+    uint16_t dir = traducir_direccion(&vmx->memoria, vmx->registros[SP], 4);
+
+    // Guardar 4 bytes en la pila
+    escribir_memoria(&vmx->memoria, dir, 4, valor);
+}
+
+int32_t sacar_pila(Vmx *vmx) {
+    int segmento = (vmx->registros[SS] >> 16) & 0xFFFF;
+    int tamanioStack = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
+
+    // Verificar STACK UNDERFLOW
+    if (vmx->registros[SP] < vmx->registros[SS] ||
+        vmx->registros[SP] + 4 > vmx->registros[SS] + tamanioStack) {
+        logger("[ERROR][PILA] STACK UNDERFLOW.\n");
+        vmx->abortar("Error: STACK UNDERFLOW.");
+        return 0;
+    }
+
+    uint16_t dir = traducir_direccion(&vmx->memoria, vmx->registros[SP], 4);
+    int32_t valor = (int32_t) leer_memoria(&vmx->memoria, dir, 4);
+    vmx->registros[SP] += 4;
+
+    return valor;
+}
+
+void op_pop(Vmx *vmx) {
+    int tipo_a = get_tipo(vmx->registros[OP1]);
+    int32_t dato_a = get_dato(vmx->registros[OP1]);
+    int32_t valor = sacar_pila(vmx);
+
+    set_valor(vmx, tipo_a, dato_a, valor);
+}
+
+void op_call(Vmx *vmx) {
+    int tipo_a = get_tipo(vmx->registros[OP1]);
+    int32_t dato_a = get_dato(vmx->registros[OP1]);
+    int32_t a = get_valor(vmx, tipo_a, dato_a);
+    
+    int32_t op1_original = vmx->registros[OP1];
+
+    vmx->registros[OP1] = (TIPO_REGISTRO << 24) | IP;
+    op_push(vmx);
+    vmx->registros[OP1] = op1_original;
+    ejecutar_salto(vmx, a);
+}
+
+void op_ret(Vmx *vmx) {
+    int32_t direccion_retorno = sacar_pila(vmx);
+    vmx->registros[IP] = direccion_retorno;
+}
+
 // --- Instrucciones de dos operandos ---
 
 void op_mov(Vmx *vmx) {
@@ -608,6 +678,10 @@ void inicializar_operadores(void) {
     tabla_operaciones[OP_JNN]  = op_jnn;
     tabla_operaciones[OP_JNZ]  = op_jnz;
     tabla_operaciones[OP_NOT]  = op_not;
+    tabla_operaciones[OP_PUSH] = op_push;
+    tabla_operaciones[OP_POP]  = op_pop;
+    tabla_operaciones[OP_CALL] = op_call;
+    tabla_operaciones[OP_RET]  = op_ret;
     tabla_operaciones[OP_STOP] = op_stop;
 
     tabla_operaciones[OP_MOV]  = op_mov;

@@ -5,6 +5,7 @@
 #include "errores.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 // Formatea y muestra un valor por consola segun la mascara de formatos de EAX
 static void mostrar_valor_sys(int32_t valor, int tamanio, int formato) {
@@ -146,33 +147,34 @@ void op_sys(Vmx *vmx) {
     cantidad = vmx->registros[ECX] & 0xFFFF;
     tamanio = (vmx->registros[ECX] >> 16) & 0xFFFF;
 
-    if (tamanio == 15 || num_sys == 15) {
-        printf("Num sis: %d \n", num_sys);
-        printf("linea invalida\n");
-        return;
-    }
-
-    if (tamanio <= 0 || tamanio > 4) {
-        logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);
-        vmx->abortar("Error: Tamano invalido en SYS.");
-        return;
-    }
-    if (cantidad <= 0) {
-        logger("[ERROR][SYS] Cantidad invalida en ECX: %d (debe ser mayor a cero)\n", cantidad);
-        vmx->abortar("Error: Cantidad invalida en SYS.");
-        return;
-    }
-
-    if ((modo & 0x1F) == 0) {
-        logger("[ERROR][SYS] Mascara de formato en EAX=0x%X invalida (ningun formato valido en bits 0..4)\n", modo);
-        vmx->abortar("Error: Formato de SYS invalido.");
-        return;
+    if ((num_sys == 1 || num_sys == 2)) {
+        if ((tamanio <= 0) || tamanio > 4) {
+            logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);
+            vmx->abortar("Error: Tamano invalido en SYS.");
+            return;
+        }
+        if (!(cantidad == -1 && num_sys == 3))
+        if (cantidad <= 0) {
+            logger("[ERROR][SYS] Cantidad invalida en ECX: %d (debe ser mayor a cero)\n", cantidad);
+            vmx->abortar("Error: Cantidad invalida en SYS.");
+            return;
+        }
+        if ((modo & 0x1F) == 0) {
+            logger("[ERROR][SYS] Mascara de formato en EAX=0x%X invalida (ningun formato valido en bits 0..4)\n", modo);
+            vmx->abortar("Error: Formato de SYS invalido.");
+            return;
+        }
     }
 
     logger("[SYS] Invocando syscall %d: Modo=0x%X, DirBase=0x%08X, Cantidad=%d, Tamano=%d\n",
            num_sys, modo, dir_base, cantidad, tamanio);
-
-    if (num_sys == 1) {
+    if (num_sys == 0) {
+        #ifdef _WIN32
+            system("cls");
+        #else
+            system("clear");
+        #endif
+    }else if (num_sys == 1) {
         // SYS 1: READ
         for (i = 0; i < cantidad; i++) {
             dir_logica = dir_base + (i * tamanio);
@@ -201,9 +203,24 @@ void op_sys(Vmx *vmx) {
             logger("[SYS] WRITE celda %d: DirLogica=0x%08X DirFisica=0x%04X Valor=%d\n",
                    i, dir_logica, dir_fisica, valor);
         }
-    }
-    else {
-        logger("[ERROR][SYS] Llamada al sistema invalida o no implementada: num_sys=%d (solo se soportan 1=READ y 2=WRITE)\n", num_sys);
-        vmx->abortar("Error: Llamada al sistema (SYS) invalida o no implementada.");
-    }
+    }else if (num_sys == 4) {
+        int32_t dir_logica = vmx->registros[EDX];
+        int32_t caracter;
+        uint16_t dir_fisica;
+
+        do {
+            // Traduce y valida la dirección
+            dir_fisica = traducir_direccion(&vmx->memoria, dir_logica, 1);
+
+            // Lee un byte
+            caracter = leer_memoria(&vmx->memoria, dir_fisica, 1);
+
+            // Imprime si no es '\0'
+            if (caracter != 0)
+                printf("%c", (char)caracter);
+
+            // Avanza una celda
+            dir_logica++;
+        } while (caracter != 0);
+}
 }
