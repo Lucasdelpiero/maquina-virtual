@@ -221,3 +221,57 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
     logger("[MEMORIA] Escribir %d byte(s) en DirFisica=0x%04X <= valor=0x%08X (%d)\n",
            cant_bytes, dir_fisica, valor, valor);
 }
+
+// Por ahora estoy pasando la direccion fisica, luego le cambio esto
+// Si algun segmento no esta presente, le ponemos -1 a su registro
+void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int tamData, int extra, int stackSegment);{
+        // Segmento parametros
+        int i = 0;
+        int posFisicaActual = 0;
+
+        if (tamPar > 0)
+            mem->tabla_segmentos[i] = posFisicaActual;
+        else {
+            (mem->registros)[CodigoRegistro.PS] = -1
+        }
+        posFisicaActual += tamPar;
+        i++;
+
+        // Segmento tamPar
+        if (tamConst > 0)
+            mem->tabla_segmentos[i] = posFisicaActual;
+        else {
+            (mem->registros)[CodigoRegistro.KS] = -1
+        }
+        posFisicaActual += tamPar;
+        i++;
+
+        // Segmento Codigo
+        if (tamConst > 0)
+            mem->tabla_segmentos[i] = posFisicaActual;
+        else {
+            (mem->registros)[CodigoRegistro.CS] = -1
+        }
+        posFisicaActual += tamPar;
+        i++;
+
+        // Segmento Extra
+        if (tamConst > 0)
+            mem->tabla_segmentos[i] = posFisicaActual;
+        else {
+            (mem->registros)[CodigoRegistro.ES] = -1
+        }
+        posFisicaActual += tamPar;
+        i++;
+
+        // Segmento Stack segment
+        if (tamConst > 0)
+            mem->tabla_segmentos[i] = posFisicaActual;
+        else {
+                CodigoRegistro.
+            (mem->registros)[CodigoRegistro.SS] = -1
+        }
+        posFisicaActual += tamPar;
+        i++;
+}
+
