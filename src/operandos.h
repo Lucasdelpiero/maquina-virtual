@@ -36,4 +36,7 @@ void set_valor(Vmx *vmx, int tipo, int32_t dato, int32_t valor);
 // Funcion especial para LDH y LDL: ciclo read-modify-write para modificar solo 16 bits
 void combinar_mitad(Vmx *vmx, int tipo, int32_t dato, uint16_t mitad_nueva, int cargar_alta);
 
+// 3 bits mas significativos del operando de memoria contiene el tamaño a leer
+int get_cantidad_bytes_accedidos(int32_t dato);
+
 #endif // OPERANDOS_H
