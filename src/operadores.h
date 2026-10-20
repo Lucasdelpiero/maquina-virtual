@@ -22,6 +22,10 @@ void op_jnp(Vmx *vmx);
 void op_jnn(Vmx *vmx);
 void op_jnz(Vmx *vmx);
 void op_not(Vmx *vmx);
+void op_push(Vmx *vmx);
+void op_pop(Vmx *vmx);
+void op_call(Vmx *vmx);
+void op_ret(Vmx *vmx);
 void op_stop(Vmx *vmx);
 
 void op_mov(Vmx *vmx);

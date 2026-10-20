@@ -64,14 +64,14 @@ void decodificar_instruccion(Vmx *vmx) {
     primer_byte = vmx->memoria.mem_principal[offset_ip];
     pos = offset_ip + 1;
 
-    if (primer_byte == OP_STOP) {
+    if (primer_byte == OP_STOP || primer_byte == OP_RET) {
         // Instruccion sin operandos (STOP, 0x0F)
-        opc = OP_STOP;
+        opc = primer_byte == OP_RET ? OP_RET : OP_STOP;
         tipo_a = TIPO_NINGUNO;
         tipo_b = TIPO_NINGUNO;
     } else if (((primer_byte >> 4) & 0x03) == 0) {
         // Instruccion con un solo operando (0x00 a 0x0A: SYS, JMP, Jcc, NOT)
-        opc = primer_byte & 0x1F;
+        opc = primer_byte & 0x0F;
         tipo_a = (primer_byte >> 6) & 0x03;
         tipo_b = TIPO_NINGUNO;
 

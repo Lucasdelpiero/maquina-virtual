@@ -16,6 +16,10 @@ static const char *tabla_mnemonicos[32] = {
     [0x08] = "JNN",
     [0x09] = "JNZ",
     [0x0A] = "NOT",
+    [0x0B] = "PUSH",
+    [0x0C] = "POP",
+    [0x0D] = "CALL",
+    [0x0E] = "RET",
     [0x0F] = "STOP",
     [0x10] = "MOV",
     [0x11] = "ADD",
@@ -44,6 +48,8 @@ static const char *tabla_registros[32] = {
     [4]  = "LAR",
     [5]  = "MAR",
     [6]  = "MBR",
+    [7]  = "SP",
+    [8]  = "BP",
     [10] = "EAX",
     [11] = "EBX",
     [12] = "ECX",
@@ -53,7 +59,27 @@ static const char *tabla_registros[32] = {
     [16] = "AC",
     [17] = "CC",
     [26] = "CS",
-    [27] = "DS"
+    [27] = "DS",
+    [28] = "ES",
+    [29] = "SS",
+    [30] = "KS",
+    [31] = "PS"
+};
+
+static const char *tabla_operandos_registros[18] = {
+    "AX", "AH", "AL",
+    "BX", "BH", "BL",
+    "CX", "CH", "CL",
+    "DX", "DH", "DL",
+    "EX", "EH", "EL",
+    "FX", "FH", "FL"
+};
+
+static const char *tabla_operandos_memoria[5] = {
+    [0] = "",
+    [1] = "b",
+    [2] = "w",
+    [4] = "l"
 };
 
 const char* obtener_mnemonico(int opc) {
@@ -64,8 +90,15 @@ const char* obtener_mnemonico(int opc) {
 }
 
 const char* obtener_nombre_registro(int cod_reg) {
+    int operando = (cod_reg >> 6) & 0x03;
+    cod_reg = cod_reg & 0x1F;
     if (cod_reg >= 0 && cod_reg < 32 && tabla_registros[cod_reg] != NULL) {
-        return tabla_registros[cod_reg];
+        if (!(cod_reg >= 10 && cod_reg <= 15) || operando == 0)
+            return tabla_registros[cod_reg];
+        else {
+            int indiceOperando = (cod_reg - 10 ) * 3 + (3 - operando);
+            return tabla_operandos_registros[indiceOperando];
+        }
     }
     return "???";
 }
@@ -78,21 +111,34 @@ void formatear_operando(char destino[], int tipo, int32_t dato) {
     destino[0] = '\0';
 
     if (tipo == TIPO_REGISTRO) {
-        cod_reg = dato & 0x1F;
+        cod_reg = dato & 0xFF;
         sprintf(destino, "%s", obtener_nombre_registro(cod_reg));
     } else if (tipo == TIPO_INMEDIATO) {
         valor_inmediato = extender_signo_16_a_32(dato & 0xFFFF);
         sprintf(destino, "%d", valor_inmediato);
     } else if (tipo == TIPO_MEMORIA) {
+        int indiceOperando = (dato >> 5) & 0x07;
         cod_reg = dato & 0x1F;
         offset = extender_signo_16_a_32((dato >> 8) & 0xFFFF);
-        if (offset == 0) {
-            sprintf(destino, "[%s]", obtener_nombre_registro(cod_reg));
-        } else if (offset > 0) {
-            sprintf(destino, "[%s+%d]", obtener_nombre_registro(cod_reg), offset);
-        } else {
-            sprintf(destino, "[%s%d]", obtener_nombre_registro(cod_reg), offset);
+
+        if (indiceOperando == 1 || indiceOperando == 2 || indiceOperando == 4) {
+            const char *operando = tabla_operandos_memoria[indiceOperando];
+            if (offset == 0) {
+                sprintf(destino, "%s[%s]", operando , obtener_nombre_registro(cod_reg));
+            } else if (offset > 0) {
+                    sprintf(destino, "%s[%s+%d]", operando , obtener_nombre_registro(cod_reg), offset);
+                } else {
+                        sprintf(destino, "%s[%s%d]", operando , obtener_nombre_registro(cod_reg), offset);
+                }
         }
+        else
+            if (offset == 0) {
+                sprintf(destino, "[%s]" , obtener_nombre_registro(cod_reg));
+            } else if (offset > 0) {
+                sprintf(destino, "[%s+%d]" , obtener_nombre_registro(cod_reg), offset);
+            } else {
+                sprintf(destino, "[%s%d]" , obtener_nombre_registro(cod_reg), offset);
+            }
     }
 }
 
@@ -110,14 +156,14 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
     int32_t dato_a = 0;
     int32_t dato_b = 0;
 
-    if (primer_byte == OP_STOP) {
-        opc = OP_STOP;
+    if (primer_byte == OP_STOP || primer_byte == OP_RET) {
+        opc = primer_byte == OP_STOP ? OP_STOP : OP_RET;
     } else if (((primer_byte >> 4) & 0x03) == 0) {
         opc = primer_byte & 0x1F;
         tipo_a = (primer_byte >> 6) & 0x03;
 
         if (tipo_a == TIPO_REGISTRO) {
-            dato_a = vmx->memoria.mem_principal[pos] & 0x1F;
+            dato_a = vmx->memoria.mem_principal[pos] & 0xFF;
             pos += 1;
         } else if (tipo_a == TIPO_INMEDIATO) {
             uint16_t val16 = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
@@ -125,7 +171,7 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
             pos += 2;
         } else if (tipo_a == TIPO_MEMORIA) {
             uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
-            uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0x1F;
+            uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0xFF;
             dato_a = ((int32_t)offset << 8) | cod_reg;
             pos += 3;
         }
@@ -136,7 +182,7 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
 
         // B se codifica primero en el binario
         if (tipo_b == TIPO_REGISTRO) {
-            dato_b = vmx->memoria.mem_principal[pos] & 0x1F;
+            dato_b = vmx->memoria.mem_principal[pos] & 0xFF;
             pos += 1;
         } else if (tipo_b == TIPO_INMEDIATO) {
             uint16_t val16 = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
@@ -144,14 +190,14 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
             pos += 2;
         } else if (tipo_b == TIPO_MEMORIA) {
             uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
-            uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0x1F;
+            uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0xFF;
             dato_b = ((int32_t)offset << 8) | cod_reg;
             pos += 3;
         }
 
         // A se codifica segundo
         if (tipo_a == TIPO_REGISTRO) {
-            dato_a = vmx->memoria.mem_principal[pos] & 0x1F;
+            dato_a = vmx->memoria.mem_principal[pos] & 0xFF;
             pos += 1;
         } else if (tipo_a == TIPO_INMEDIATO) {
             uint16_t val16 = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
@@ -159,7 +205,7 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
             pos += 2;
         } else if (tipo_a == TIPO_MEMORIA) {
             uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[pos] << 8) | (uint16_t)vmx->memoria.mem_principal[pos + 1];
-            uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0x1F;
+            uint8_t cod_reg = vmx->memoria.mem_principal[pos + 2] & 0xFF;
             dato_a = ((int32_t)offset << 8) | cod_reg;
             pos += 3;
         }
@@ -183,11 +229,11 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
         strcat(bytes_hex, byte_str);
     }
 
-    if (opc == OP_STOP) {
+    if (opc == OP_STOP || opc == OP_RET) {
         snprintf(buffer, tam_buffer, "[%04X] %-17s | %s", dir_fisica, bytes_hex, mnem);
-    } else if (opc <= 0x0A) {
+    } else if (opc <= 0x0D) {
         snprintf(buffer, tam_buffer, "[%04X] %-17s | %s %s", dir_fisica, bytes_hex, mnem, op_a_str);
-    } else {
+    } else if (opc >= 0x0F){
         snprintf(buffer, tam_buffer, "[%04X] %-17s | %s %s, %s", dir_fisica, bytes_hex, mnem, op_a_str, op_b_str);
     }
 

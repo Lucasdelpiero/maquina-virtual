@@ -21,9 +21,8 @@ typedef enum {
 typedef enum {
     OP_SYS = 0x00, OP_JMP = 0x01, OP_JP = 0x02, OP_JN = 0x03, OP_JZ = 0x04,
     OP_JC = 0x05, OP_JV = 0x06, OP_JNP = 0x07, OP_JNN = 0x08, OP_JNZ = 0x09,
-    OP_NOT = 0x0A,
-    // 0x0B a 0x0E: sin uso / reservados
-    OP_STOP = 0x0F,
+    OP_NOT = 0x0A, OP_PUSH = 0X0B , OP_POP = 0X0C , OP_CALL = 0X0D ,
+    OP_RET = 0X0E , OP_STOP = 0x0F,
     OP_MOV = 0x10, OP_ADD = 0x11, OP_SUB = 0x12, OP_MUL = 0x13, OP_DIV = 0x14,
     OP_CMP = 0x15, OP_AND = 0x16, OP_OR = 0x17, OP_XOR = 0x18, OP_SWAP = 0x19,
     OP_SHL = 0x1A, OP_SHR = 0x1B, OP_SAR = 0x1C, OP_LDL = 0x1D, OP_LDH = 0x1E,

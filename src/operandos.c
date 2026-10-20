@@ -75,8 +75,21 @@ uint16_t resolver_direccion_memoria(Vmx *vmx, int32_t dato) {
 
 // Obtiene el valor numerico de 32 bits del operando
 int32_t get_valor(Vmx *vmx, int tipo, int32_t dato) {
-    if (tipo == TIPO_REGISTRO) { //dato contiene el valor el registro operando (OP1/OP2)
-        return vmx->registros[dato & 0x1F]; // Al ser operando de tipo registro, se guarda el indice/codigo del registro en los 5 bits menos significativos, luego de esto accedemos al dato directamente.
+    if (tipo == TIPO_REGISTRO) {
+        int operando = (dato >> 6) & 0x03;
+        int registro = dato & 0x1F;
+
+        if (operando == 0)
+            return vmx->registros[registro];
+
+        else if (operando == 1) // AL
+            return (int8_t)(vmx->registros[registro] & 0x000000FF);
+            
+        else if (operando == 2) // AH
+            return (int8_t)((vmx->registros[registro] & 0x0000FF00) >> 8);
+
+        else if (operando == 3) // AX
+            return (int16_t)(vmx->registros[registro] & 0x0000FFFF);           
     }
     if (tipo == TIPO_INMEDIATO) { // En este caso dato contendra una constante de 16 bits con el valor directamente
         return extender_signo_16_a_32(dato & 0xFFFF);
@@ -94,7 +107,22 @@ int32_t get_valor(Vmx *vmx, int tipo, int32_t dato) {
 // Guarda un valor de 32 bits en el destino (registro o memoria)
 void set_valor(Vmx *vmx, int tipo, int32_t dato, int32_t valor) {
     if (tipo == TIPO_REGISTRO) {
-        vmx->registros[dato & 0x1F] = valor; // Idem a lo explicado antes pero ahora seteamos
+        int operando = (dato >> 6) & 0x03;
+        int registro = dato & 0x1F;
+
+        if (operando == 0)
+            vmx->registros[registro] = valor;
+
+        else if (operando == 1) // AL
+            vmx->registros[registro] = 
+            (vmx->registros[registro] & 0xFFFFFF00) | (valor & 0xFF);
+        else if (operando == 2) // AH
+            vmx->registros[registro] =
+            (vmx->registros[registro] & 0xFFFF00FF) | ((valor & 0xFF) << 8);
+        else if (operando == 3) // AX
+            vmx->registros[registro] =
+            (vmx->registros[registro] & 0xFFFF0000) | (valor & 0xFFFF);
+
         logger("[OPERANDO] Registro r%d <= %d (0x%08X)\n", dato & 0x1F, valor, valor);
     } else if (tipo == TIPO_MEMORIA) {
         int32_t dir_logica = calcular_direccion_logica_memoria(vmx, dato);

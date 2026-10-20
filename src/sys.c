@@ -6,6 +6,7 @@
 #include "depurador.h"
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 // Formatea y muestra un valor por consola segun la mascara de formatos de EAX
 static void mostrar_valor_sys(int32_t valor, int tamanio, int formato) {
@@ -163,12 +164,18 @@ void op_sys(Vmx *vmx) {
         logger("[ERROR][SYS] Mascara de formato en EAX=0x%X invalida (ningun formato valido en bits 0..4)\n", modo);
         vmx->abortar("Error: Formato de SYS invalido.");
         return;
+
     }
 
     logger("[SYS] Invocando syscall %d: Modo=0x%X, DirBase=0x%08X, Cantidad=%d, Tamano=%d\n",
            num_sys, modo, dir_base, cantidad, tamanio);
-
-    if (num_sys == 1) {
+    if (num_sys == 0) {
+        #ifdef _WIN32
+            system("cls");
+        #else
+            system("clear");
+        #endif
+    }else if (num_sys == 1) {
         // SYS 1: READ
         for (i = 0; i < cantidad; i++) {
             dir_logica = dir_base + (i * tamanio);
@@ -197,9 +204,24 @@ void op_sys(Vmx *vmx) {
             logger("[SYS] WRITE celda %d: DirLogica=0x%08X DirFisica=0x%04X Valor=%d\n",
                    i, dir_logica, dir_fisica, valor);
         }
-    }
-    else {
-        logger("[ERROR][SYS] Llamada al sistema invalida o no implementada: num_sys=%d (solo se soportan 1=READ y 2=WRITE)\n", num_sys);
-        vmx->abortar("Error: Llamada al sistema (SYS) invalida o no implementada.");
-    }
+    }else if (num_sys == 4) {
+        int32_t dir_logica = vmx->registros[EDX];
+        int32_t caracter;
+        uint16_t dir_fisica;
+
+        do {
+            // Traduce y valida la dirección
+            dir_fisica = traducir_direccion(&vmx->memoria, dir_logica, 1);
+
+            // Lee un byte
+            caracter = leer_memoria(&vmx->memoria, dir_fisica, 1);
+
+            // Imprime si no es '\0'
+            if (caracter != 0)
+                printf("%c", (char)caracter);
+
+            // Avanza una celda
+            dir_logica++;
+        } while (caracter != 0);
+}
 }
