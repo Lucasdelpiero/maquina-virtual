@@ -27,7 +27,7 @@ Entonces usamos la tabla de segmentos para traducir las direcciones logicas a di
 
 Recordar que las direcciones logicas, estan compuestas por:
 Codigo de segmento en sus bytes altos: 0/1 indica el segmento que puede ser el code segment data segment
-En sus bytes bajos indica el offset, que es desplazamiento desde la base del segmento dado por el codigo de segmento.
+En sus bytes bajos indica el offset, que es el desplazamiento desde la base del segmento dado por el codigo de segmento.
 
 Para obtener la dirección física: Esta se obtiene como
 `dir fisica = base del segmento + desplazamiento/offset`
@@ -39,7 +39,7 @@ Donde la base del segmento se extrae de los 16 bits altos del puntero (guardado 
 
 La maquina virtual cuando usamos un registro como puntero, carga en los 2 bytes altos la base del segmeto (1/0) y luego en los 2 bajos el valor (offset)
 
-Usando la misma logica, esto tambien se usa para validar, el acceso, se obtiene la base, se le suma el offset y verificamos que el tamaño no exeda al tamaño del segmento.
+Usando la misma logica, esto tambien se usa para validar el acceso, se obtiene la base, se le suma el offset y verificamos que el tamaño no exeda al tamaño del segmento.
 Tambien para validar la escritura, que la memoria a escribir no supere el tamaño del segmento o que posicion base + tamaño (a escribir) <= tam maximo del segmento
 
 Para los registros tambien se usa un vector de 32 bits o 4bytes cada componente, esta definido en la especificacion que los registros son de 32 bits.

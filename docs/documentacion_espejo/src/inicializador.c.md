@@ -1,3 +1,5 @@
+## cargar_programa
+
 ```c
     tamCS = (temp[0] << 8) | temp[1];
 
@@ -22,7 +24,6 @@ Luego:
     setear_tabla_segmento(mem, tamCS);
     return 0;
 ```
-
 
 Luego 
 

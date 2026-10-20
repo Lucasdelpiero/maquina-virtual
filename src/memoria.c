@@ -128,6 +128,7 @@ void inicializar_memoria(Memoria *mem) {
         mem->tabla_segmentos[i] = 0xFFFFFFFF;
     }
     mem->registros = NULL;
+    mem->tam_mem_kib = 16;
 }
 
 // ============================================================================
