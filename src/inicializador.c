@@ -56,6 +56,16 @@ void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler) {
     inicializar_operadores();
 }
 
+// Lee 2 bytes en formato big-endian
+static int leer_uint16_be(FILE *f, int *resultado) {
+    uint8_t buffer[2];
+    if (fread(buffer, sizeof(uint8_t), 2, f) != 2) {
+        return 0;
+    }
+    *resultado = ((int)buffer[0] << 8) | (int)buffer[1];
+    return 1;
+}
+
 void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
     FILE *f;
     uint8_t byteLeido;
@@ -95,68 +105,159 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
         vmx->abortar("Error: No se pudo leer la version del archivo .vmx.");
     }
     version = byteLeido;
-    if (version != 1) {
+    if (version != 1 && version != 2) {
         fclose(f);
-        logger("[ERROR][CARGA] Version %d no compatible (se esperaba 1) en '%s'\n", version, ruta_archivo);
-        vmx->abortar("Error: Version de archivo .vmx no compatible. Se esperaba version 1.");
+        logger("[ERROR][CARGA] Version %d no compatible (se esperaba 1 o 2) en '%s'\n", version, ruta_archivo);
+        vmx->abortar("Error: Version de archivo .vmx no compatible. Se esperaba version 1 o 2.");
     }
 
-    // Carga tamano de codigo big-endian (2 bytes)
-    for (i = 0; i < 2; i++) {
-        if (fread(&byteLeido, sizeof(uint8_t), 1, f) != 1) {
-            fclose(f);
-            logger("[ERROR][CARGA] Fallo al leer tamano de codigo en '%s'\n", ruta_archivo);
-            vmx->abortar("Error: No se pudo leer el tamano de codigo.");
+    if (version == 1) {
+        // Carga tamano de codigo big-endian (2 bytes)
+        for (i = 0; i < 2; i++) {
+            if (fread(&byteLeido, sizeof(uint8_t), 1, f) != 1) {
+                fclose(f);
+                logger("[ERROR][CARGA] Fallo al leer tamano de codigo en '%s'\n", ruta_archivo);
+                vmx->abortar("Error: No se pudo leer el tamano de codigo.");
+            }
+            temp[i] = byteLeido;
         }
-        temp[i] = byteLeido;
-    }
-    tamCS = (temp[0] << 8) | temp[1];
+        tamCS = (temp[0] << 8) | temp[1];
 
-    if (tamCS <= 0 || tamCS > 16384) {
+        if (tamCS <= 0 || tamCS > 16384) {
+            fclose(f);
+            logger("[ERROR][CARGA] Tamano de codigo invalido: %d bytes (debe ser entre 1 y 16384) en '%s'\n", tamCS, ruta_archivo);
+            vmx->abortar("Error: Tamano de codigo invalido en la cabecera del archivo .vmx.");
+        }
+
+        // Carga el codigo del programa en memoria fisica a partir de la posicion 0
+        i = 0;
+        while (i < tamCS && fread(&byteLeido, sizeof(uint8_t), 1, f) == 1) {
+            vmx->memoria.mem_principal[i] = byteLeido;
+            i++;
+        }
+
+        if (i != tamCS) {
+            fclose(f);
+            logger("[ERROR][CARGA] Archivo truncado: se esperaban %d bytes de codigo y solo se leyeron %d en '%s'\n", tamCS, i, ruta_archivo);
+            vmx->abortar("Error: El archivo .vmx termino antes de lo esperado o esta danado.");
+        }
+
         fclose(f);
-        logger("[ERROR][CARGA] Tamano de codigo invalido: %d bytes (debe ser entre 1 y 16384) en '%s'\n", tamCS, ruta_archivo);
-        vmx->abortar("Error: Tamano de codigo invalido en la cabecera del archivo .vmx.");
-    }
 
-    // Carga el codigo del programa en memoria fisica a partir de la posicion 0
-    i = 0;
-    while (i < tamCS && fread(&byteLeido, sizeof(uint8_t), 1, f) == 1) {
-        vmx->memoria.mem_principal[i] = byteLeido;
-        i++;
-    }
+        // Configura la tabla de descriptores de segmentos:
+        // Entrada 0 (Codigo): Base = 0, Tamano = tamCS
+        vmx->memoria.tabla_segmentos[0] = tamCS & 0xFFFF;
 
-    if (i != tamCS) {
+        // Entrada 1 (Datos): Base = tamCS, Tamano = 16384 - tamCS
+        vmx->memoria.tabla_segmentos[1] = ((uint32_t)tamCS << 16) | (16384 - tamCS);
+
+        // Entradas 2 a 7: Invalidas (0xFFFFFFFF)
+        for (i = 2; i < 8; i++) {
+            vmx->memoria.tabla_segmentos[i] = 0xFFFFFFFF;
+        }
+
+        // Inicializa los registros punteros segun la especificacion:
+        // CS = Segmento 0, Offset 0 -> 0x00000000
+        // DS = Segmento 1, Offset 0 -> 0x00010000
+        // IP = CS
+        vmx->registros[CS] = 0x00000000;
+        vmx->registros[DS] = 0x00010000; // Este 1 es porque el DS es un puntero y apunta en los primeros 16 bits al 1er segmento
+        vmx->registros[IP] = vmx->registros[CS];
+
+        logger("[CARGA] Archivo '%s' cargado con exito.\n", ruta_archivo);
+        logger("[CARGA] Tamano del codigo: %d bytes.\n", tamCS);
+        logger("[CARGA] Segmento Codigo (0): Base=0, Tamano=%d\n", tamCS);
+        logger("[CARGA] Segmento Datos  (1): Base=%d, Tamano=%d\n", tamCS, 16384 - tamCS);
+        logger("[CARGA] Registros iniciales: CS=0x%08X, DS=0x%08X, IP=0x%08X\n",
+               vmx->registros[CS], vmx->registros[DS], vmx->registros[IP]);
+    } else {
+        // Cabecera Version 2: 18 bytes totales (6 campos de 2 bytes big-endian)
+        int tam_codigo = 0;
+        int tam_datos = 0;
+        int tam_extra = 0;
+        int tam_pila = 0;
+        int tam_const = 0;
+        int offset_entry_point = 0;
+        int tam_ps = 0;
+        int pos_const = 0;
+        int pos_codigo = 0;
+        int pos_fin_codigo = 0;
+        int limite_memoria = 0;
+
+        if (!leer_uint16_be(f, &tam_codigo) ||
+            !leer_uint16_be(f, &tam_datos)  ||
+            !leer_uint16_be(f, &tam_extra)  ||
+            !leer_uint16_be(f, &tam_pila)   ||
+            !leer_uint16_be(f, &tam_const)  ||
+            !leer_uint16_be(f, &offset_entry_point)) {
+            fclose(f);
+            logger("[ERROR][CARGA] Fallo al leer campos de cabecera V2 en '%s'\n", ruta_archivo);
+            vmx->abortar("Error: No se pudo leer la cabecera completa del archivo .vmx version 2.");
+        }
+
+        if (tam_codigo <= 0) {
+            fclose(f);
+            logger("[ERROR][CARGA] Tamano de codigo invalido en V2: %d bytes\n", tam_codigo);
+            vmx->abortar("Error: Tamano de codigo invalido en la cabecera del archivo .vmx.");
+        }
+
+        // Si el registro PS no es -1 (0xFFFFFFFF) y la entrada 0 esta asignada, existe Param Segment
+        if (vmx->registros[PS] != -1 && vmx->memoria.tabla_segmentos[0] != 0xFFFFFFFF) {
+            tam_ps = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
+        } else {
+            tam_ps = 0;
+        }
+
+        // Organizacion de memoria fisica segun la parte 2 de la vm:
+        // Param Segment -> Const Segment -> Code Segment -> Data Segment -> Extra Segment -> Stack Segment
+        pos_const = tam_ps;
+        pos_codigo = pos_const + tam_const;
+        pos_fin_codigo = pos_codigo + tam_codigo;
+
+        limite_memoria = vmx->memoria.tam_mem_kib * 1024;
+
+        // Valida que el proceso entre en memoria
+        // pos_fin_codigo = Param Segment + Const Segment + Code Segment lo que si estoy considerando toda la memoria
+        if (pos_fin_codigo + tam_datos + tam_extra + tam_pila > limite_memoria) {
+            fclose(f);
+            logger("[ERROR][CARGA] Memoria insuficiente para alojar proceso (%d bytes requeridos > %d bytes disponibles)\n",
+                   pos_fin_codigo + tam_datos + tam_extra + tam_pila, limite_memoria);
+            vmx->abortar("Error: Memoria insuficiente.");
+        }
+
+        // En el archivo .vmx binario: primero va el codigo (tam_codigo) y luego Const Segment (tam_const)
+        // 1. Leer Code Segment y escribir en RAM en pos_codigo (despues de PS y KS)
+        i = 0;
+        while (i < tam_codigo && fread(&byteLeido, sizeof(uint8_t), 1, f) == 1) {
+            vmx->memoria.mem_principal[pos_codigo + i] = byteLeido;
+            i++;
+        }
+        if (i != tam_codigo) {
+            fclose(f);
+            logger("[ERROR][CARGA] Archivo truncado al leer Code Segment (%d de %d bytes leidos)\n", i, tam_codigo);
+            vmx->abortar("Error: El archivo .vmx termino antes de lo esperado o esta danado.");
+        }
+
+        // 2. Leer Const Segment y escribir en RAM en pos_const (despues de PS)
+        if (tam_const > 0) {
+            i = 0;
+            while (i < tam_const && fread(&byteLeido, sizeof(uint8_t), 1, f) == 1) {
+                vmx->memoria.mem_principal[pos_const + i] = byteLeido;
+                i++;
+            }
+            if (i != tam_const) {
+                fclose(f);
+                logger("[ERROR][CARGA] Archivo truncado al leer Const Segment (%d de %d bytes leidos)\n", i, tam_const);
+                vmx->abortar("Error: El archivo .vmx termino antes de lo esperado o esta danado.");
+            }
+        }
+
         fclose(f);
-        logger("[ERROR][CARGA] Archivo truncado: se esperaban %d bytes de codigo y solo se leyeron %d en '%s'\n", tamCS, i, ruta_archivo);
-        vmx->abortar("Error: El archivo .vmx termino antes de lo esperado o esta danado.");
+
+        logger("[CARGA] Archivo V2 '%s' cargado con exito.\n", ruta_archivo);
+        logger("[CARGA]   Header: Code=%d, Data=%d, Extra=%d, Stack=%d, Const=%d, EntryPoint=0x%04X\n",
+               tam_codigo, tam_datos, tam_extra, tam_pila, tam_const, offset_entry_point);
+        logger("[CARGA]   Distribucion en memoria fisica: Param=[0..%d], Const=[%d..%d], Code=[%d..%d]\n",
+               tam_ps, pos_const, pos_const + tam_const, pos_codigo, pos_fin_codigo);
     }
-
-    fclose(f);
-
-    // Configura la tabla de descriptores de segmentos:
-    // Entrada 0 (Codigo): Base = 0, Tamano = tamCS
-    vmx->memoria.tabla_segmentos[0] = tamCS & 0xFFFF;
-
-    // Entrada 1 (Datos): Base = tamCS, Tamano = 16384 - tamCS
-    vmx->memoria.tabla_segmentos[1] = ((uint32_t)tamCS << 16) | (16384 - tamCS);
-
-    // Entradas 2 a 7: Invalidas (0xFFFFFFFF)
-    for (i = 2; i < 8; i++) {
-        vmx->memoria.tabla_segmentos[i] = 0xFFFFFFFF;
-    }
-
-    // Inicializa los registros punteros segun la especificacion:
-    // CS = Segmento 0, Offset 0 -> 0x00000000
-    // DS = Segmento 1, Offset 0 -> 0x00010000
-    // IP = CS
-    vmx->registros[CS] = 0x00000000;
-    vmx->registros[DS] = 0x00010000; // Este 1 es porque el DS es un puntero y apunta en los primeros 16 bits al 1er segmento
-    vmx->registros[IP] = vmx->registros[CS];
-
-    logger("[CARGA] Archivo '%s' cargado con exito.\n", ruta_archivo);
-    logger("[CARGA] Tamano del codigo: %d bytes.\n", tamCS);
-    logger("[CARGA] Segmento Codigo (0): Base=0, Tamano=%d\n", tamCS);
-    logger("[CARGA] Segmento Datos  (1): Base=%d, Tamano=%d\n", tamCS, 16384 - tamCS);
-    logger("[CARGA] Registros iniciales: CS=0x%08X, DS=0x%08X, IP=0x%08X\n",
-           vmx->registros[CS], vmx->registros[DS], vmx->registros[IP]);
 }

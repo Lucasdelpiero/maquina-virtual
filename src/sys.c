@@ -3,6 +3,7 @@
 #include "memoria.h"
 #include "logger.h"
 #include "errores.h"
+#include "depurador.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -147,23 +148,23 @@ void op_sys(Vmx *vmx) {
     cantidad = vmx->registros[ECX] & 0xFFFF;
     tamanio = (vmx->registros[ECX] >> 16) & 0xFFFF;
 
-    if ((num_sys == 1 || num_sys == 2)) {
-        if ((tamanio <= 0) || tamanio > 4) {
-            logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);
-            vmx->abortar("Error: Tamano invalido en SYS.");
-            return;
-        }
-        if (!(cantidad == -1 && num_sys == 3))
-        if (cantidad <= 0) {
-            logger("[ERROR][SYS] Cantidad invalida en ECX: %d (debe ser mayor a cero)\n", cantidad);
-            vmx->abortar("Error: Cantidad invalida en SYS.");
-            return;
-        }
-        if ((modo & 0x1F) == 0) {
-            logger("[ERROR][SYS] Mascara de formato en EAX=0x%X invalida (ningun formato valido en bits 0..4)\n", modo);
-            vmx->abortar("Error: Formato de SYS invalido.");
-            return;
-        }
+
+    if (tamanio <= 0 || tamanio > 4) {
+        logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);
+        vmx->abortar("Error: Tamano invalido en SYS.");
+        return;
+    }
+    if (cantidad <= 0) {
+        logger("[ERROR][SYS] Cantidad invalida en ECX: %d (debe ser mayor a cero)\n", cantidad);
+        vmx->abortar("Error: Cantidad invalida en SYS.");
+        return;
+    }
+
+    if ((modo & 0x1F) == 0) {
+        logger("[ERROR][SYS] Mascara de formato en EAX=0x%X invalida (ningun formato valido en bits 0..4)\n", modo);
+        vmx->abortar("Error: Formato de SYS invalido.");
+        return;
+
     }
 
     logger("[SYS] Invocando syscall %d: Modo=0x%X, DirBase=0x%08X, Cantidad=%d, Tamano=%d\n",
