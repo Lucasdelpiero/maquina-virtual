@@ -9,12 +9,12 @@ typedef struct Vmx Vmx;
 // Codigos numericos de los 32 registros de la maquina virtual
 typedef enum {
     IP = 0, OPC = 1, OP1 = 2, OP2 = 3, LAR = 4, MAR = 5, MBR = 6,
-    // 7, 8, 9: reservados
+    SP = 7, BP = 8,
+    // 9: reservado
     EAX = 10, EBX = 11, ECX = 12, EDX = 13, EEX = 14, EFX = 15,
     AC = 16, CC = 17,
     // 18-25: reservados
-    CS = 26, DS = 27
-    // 28-31: reservados
+    CS = 26, DS = 27, ES = 28, SS = 29, KS = 30, PS = 31
 } CodigoRegistro;
 
 // Codigos de operacion de las instrucciones (26 operaciones de la especificacion)

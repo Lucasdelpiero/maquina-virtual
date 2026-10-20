@@ -3,6 +3,7 @@
 #include "memoria.h"
 #include "logger.h"
 #include "errores.h"
+#include "depurador.h"
 #include <stdio.h>
 #include <stdint.h>
 
@@ -146,11 +147,6 @@ void op_sys(Vmx *vmx) {
     cantidad = vmx->registros[ECX] & 0xFFFF;
     tamanio = (vmx->registros[ECX] >> 16) & 0xFFFF;
 
-    if (tamanio == 15 || num_sys == 15) {
-        printf("Num sis: %d \n", num_sys);
-        printf("linea invalida\n");
-        return;
-    }
 
     if (tamanio <= 0 || tamanio > 4) {
         logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);

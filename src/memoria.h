@@ -11,6 +11,7 @@ typedef struct {
     uint32_t tabla_segmentos[TAM_SEGMENTOS];
     uint8_t mem_principal[TAM_MEMORIA_PRINCIPAL];
     uint32_t *registros;
+    int tam_mem_kib;
 } Memoria;
 
 // Funciones de manipulacion de memoria

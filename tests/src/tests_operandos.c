@@ -3,6 +3,7 @@
 #include "../../src/operadores.h"
 #include "../../src/memoria.h"
 #include "../../src/errores.h"
+#include "../../src/decodificador.h"
 #include <stdio.h>
 #include <setjmp.h>
 
@@ -102,6 +103,24 @@ void correr_tests_operandos(void) {
     // combinar_mitad en memoria: [DS + 10] tenia 0x11223344
     combinar_mitad(&vmx, TIPO_MEMORIA, op_mem, 0x9999, 1); // Parte alta -> 0x99993344
     ASSERT_EQUAL(get_valor(&vmx, TIPO_MEMORIA, op_mem), (int32_t)0x99993344, "combinar_mitad (LDH memoria): Modifica parte alta en memoria");
+
+    // Test de decodificacion preservando bytes crudos en OP1/OP2 segun la especificacion
+    vmx.memoria.tabla_segmentos[0] = 50; // tamano codigo = 50
+    vmx.registros[IP] = 0;
+    // Instruccion MOV [DS+8], OP1 codificada como 70 02 00 08 9B
+    vmx.memoria.mem_principal[0] = 0x70;
+    vmx.memoria.mem_principal[1] = 0x02;
+    vmx.memoria.mem_principal[2] = 0x00;
+    vmx.memoria.mem_principal[3] = 0x08;
+    vmx.memoria.mem_principal[4] = 0x9B;
+    decodificar_instruccion(&vmx);
+    ASSERT_EQUAL(vmx.registros[OPC], 0x10, "decodificar_instruccion: OPC es MOV (0x10)");
+    ASSERT_EQUAL(vmx.registros[OP1], (int32_t)0x0300089B, "decodificar_instruccion: OP1 preserva byte crudo 0x0300089B");
+    ASSERT_EQUAL(vmx.registros[OP2], (int32_t)0x01000002, "decodificar_instruccion: OP2 contiene 0x01000002");
+    ASSERT_EQUAL(vmx.registros[IP], 5, "decodificar_instruccion: IP avanzo 5 bytes");
+    // Test de resolucion de direccion logica a partir del dato con bits reservados en el registro (0x9B)
+    int32_t dir_res = calcular_direccion_logica_memoria(&vmx, 0x00089B);
+    ASSERT_EQUAL(dir_res, 0x00010008, "calcular_direccion_logica_memoria: 0x00089B resuelve correctamente a DS+8 (0x00010008)");
 
     // 6. Tests actualizar_cc (casos exactos de la tabla de la especificacion)
     // Caso 1: MOV -> res = -1, C=0, V=0 -> N=1, Z=0, C=0, V=0

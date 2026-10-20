@@ -2,6 +2,7 @@
 #include "decodificador.h"
 #include "disassembler.h"
 #include "logger.h"
+#include "depurador.h"
 #include <stdio.h>
 #include <stddef.h>
 
@@ -21,19 +22,20 @@ int ip_valido(Vmx *vmx) {
     }
 
     // IP es una direccion logica: 16 bits altos = segmento, 16 bits bajos = offset
-    // Lo que debemos validar es que el segmento sea cero en este caso, porque queremos acceder al codigo
     segmento = (vmx->registros[IP] >> 16) & 0xFFFF;
     offset = vmx->registros[IP] & 0xFFFF;
 
-    // El codigo del proceso reside exclusivamente en el segmento 0
-    if (segmento != 0) {
-        logger("[ERROR][VMX] IP invalido: segmento=%d (el codigo solo reside en segmento 0). IP=0x%08X\n",
-               segmento, vmx->registros[IP]);
+    // El codigo del proceso reside en el segmento apuntado por CS
+    int segmento_cs = (vmx->registros[CS] >> 16) & 0xFFFF;
+
+    if (segmento != segmento_cs || segmento >= TAM_SEGMENTOS || vmx->memoria.tabla_segmentos[segmento] == 0xFFFFFFFF) {
+        logger("[ERROR][VMX] IP invalido: segmento=%d (esperado CS=%d). IP=0x%08X\n",
+               segmento, segmento_cs, vmx->registros[IP]);
         return 0;
     }
 
-    // El tamano del codigo esta almacenado en los 16 bits bajos de tabla_segmentos[0]
-    tamano_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
+    // El tamano del codigo esta almacenado en los 16 bits bajos del descriptor del segmento de codigo
+    tamano_codigo = vmx->memoria.tabla_segmentos[segmento_cs] & 0xFFFF;
 
     /*
         IP = 0x0000 0004
@@ -91,6 +93,9 @@ void ejecutar_vmx(Vmx *vmx) {
 
         // 2. Ejecucion: delega la operacion cargada en OPC
         ejecutar_instruccion(vmx);
+
+        // 3. Paso a paso: si el breakpoint anterior pidio Enter, pausa tras esta instruccion
+        depurador_verificar_paso_a_paso(vmx);
     }
 
     logger("[VMX] Ciclo de ejecucion finalizado.\n");

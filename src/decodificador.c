@@ -20,8 +20,8 @@ static int32_t leer_operando(Vmx *vmx, int tipo, int *pos) {
     int p = *pos;
 
     if (tipo == TIPO_REGISTRO) {
-        // 1 byte: codigo de registro en los 5 bits menos significativos
-        dato = vmx->memoria.mem_principal[p] & 0x1F;
+        // 1 byte: codigo de operando tal cual como esta codificado en memoria
+        dato = vmx->memoria.mem_principal[p];
         *pos = p + 1;
     } else if (tipo == TIPO_INMEDIATO) {
         // 2 bytes big-endian: valor entero de 16 bits
@@ -29,9 +29,9 @@ static int32_t leer_operando(Vmx *vmx, int tipo, int *pos) {
         dato = val16;
         *pos = p + 2;
     } else if (tipo == TIPO_MEMORIA) {
-        // 3 bytes: 2 bytes de offset big-endian + 1 byte con codigo de registro (5 bits bajos)
+        // 3 bytes: 2 bytes de offset big-endian + 1 byte de registro tal cual como esta codificado en memoria
         uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[p] << 8) | (uint16_t)vmx->memoria.mem_principal[p + 1];
-        uint8_t cod_reg = vmx->memoria.mem_principal[p + 2] & 0x1F;
+        uint8_t cod_reg = vmx->memoria.mem_principal[p + 2];
         dato = ((int32_t)offset << 8) | cod_reg;
         *pos = p + 3;
     }
