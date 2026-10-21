@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "memoria.h"
 #include "vmx.h"
+#include "param_segment.h"
 
 /*
     Tareas del decodificador:
@@ -18,7 +19,8 @@ void setear_tabla_segmento(Memoria *mem, int tamCS);
 
 // Funciones del subsistema principal Vmx
 void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler);
-void cargar_programa(Vmx *vmx, char ruta_archivo[]);
+void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros);
+void inicializar_subrutina_principal(Memoria mem, InfoParamSegment info_ps);
 
 #endif // INICIALIZADOR_H
 

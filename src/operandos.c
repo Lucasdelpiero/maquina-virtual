@@ -84,19 +84,21 @@ int32_t get_valor(Vmx *vmx, int tipo, int32_t dato) {
 
         else if (operando == 1) // AL
             return (int8_t)(vmx->registros[registro] & 0x000000FF);
-            
+
         else if (operando == 2) // AH
             return (int8_t)((vmx->registros[registro] & 0x0000FF00) >> 8);
 
         else if (operando == 3) // AX
-            return (int16_t)(vmx->registros[registro] & 0x0000FFFF);           
+            return (int16_t)(vmx->registros[registro] & 0x0000FFFF);
     }
     if (tipo == TIPO_INMEDIATO) { // En este caso dato contendra una constante de 16 bits con el valor directamente
         return extender_signo_16_a_32(dato & 0xFFFF);
     }
     if (tipo == TIPO_MEMORIA) {
         int32_t dir_logica = calcular_direccion_logica_memoria(vmx, dato);
-        return get_valor_memoria(&vmx->memoria, dir_logica, 4);
+        int bytes_accedidos = get_cantidad_bytes_accedidos(dato);   // Los 3 bits mas significativos indican la cant de bytes a leer
+
+        return get_valor_memoria(&vmx->memoria, dir_logica, bytes_accedidos);
     }
 
     logger("[ERROR][OPERANDO] Tipo de operando invalido al leer valor: tipo=%d, dato=0x%06X\n", tipo, dato);
@@ -114,7 +116,7 @@ void set_valor(Vmx *vmx, int tipo, int32_t dato, int32_t valor) {
             vmx->registros[registro] = valor;
 
         else if (operando == 1) // AL
-            vmx->registros[registro] = 
+            vmx->registros[registro] =
             (vmx->registros[registro] & 0xFFFFFF00) | (valor & 0xFF);
         else if (operando == 2) // AH
             vmx->registros[registro] =
@@ -126,7 +128,8 @@ void set_valor(Vmx *vmx, int tipo, int32_t dato, int32_t valor) {
         logger("[OPERANDO] Registro r%d <= %d (0x%08X)\n", dato & 0x1F, valor, valor);
     } else if (tipo == TIPO_MEMORIA) {
         int32_t dir_logica = calcular_direccion_logica_memoria(vmx, dato);
-        set_valor_memoria(&vmx->memoria, dir_logica, valor, 4);
+        int bytes_accedidos = get_cantidad_bytes_accedidos(dato);   // Los 3 bits mas significativos indican la cant de bytes a leer
+        set_valor_memoria(&vmx->memoria, dir_logica, valor, bytes_accedidos);
     } else if (tipo == TIPO_INMEDIATO) {
         logger("[ERROR][OPERANDO] Intento de escribir en operando inmediato: dato=0x%06X, valor=%d (0x%08X)\n", dato, valor, valor);
         vmx->abortar("Error: Intento de escribir en operando inmediato.");
@@ -163,4 +166,19 @@ void combinar_mitad(Vmx *vmx, int tipo, int32_t dato, uint16_t mitad_nueva, int 
 
     //Armado el numero, lo seteamos.
     set_valor(vmx, tipo, dato, combinado);
+}
+
+// 3 bits mas significativos del operando de memoria contiene el tamaño a leer
+int get_cantidad_bytes_accedidos(int32_t dato){
+    int modificador_operando = dato & 0X00E0;
+    int bytes_accedidos = 4;
+
+    if (modificador_operando == 1)      //lee un byte
+        bytes_accedidos = 1;
+    else if (modificador_operando == 2) // lee un word: 2 bytes
+        bytes_accedidos = 2;
+    else if (modificador_operando == 3) // lee un long: 4 bytes, lo mismo que un int
+        bytes_accedidos = 3;
+
+    return bytes_accedidos;
 }

@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <string.h>
 
+
 /*
     Tareas del inicializador:
     -Lee el archivo en binario
@@ -66,7 +67,7 @@ static int leer_uint16_be(FILE *f, int *resultado) {
     return 1;
 }
 
-void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
+void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
     FILE *f;
     uint8_t byteLeido;
     char identificador[6];
@@ -254,6 +255,9 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
 
         fclose(f);
 
+        crear_segmentos(&(vmx->memoria), tam_parametros, tam_const, tam_codigo, tam_datos, tam_extra, tam_pila);
+
+
         logger("[CARGA] Archivo V2 '%s' cargado con exito.\n", ruta_archivo);
         logger("[CARGA]   Header: Code=%d, Data=%d, Extra=%d, Stack=%d, Const=%d, EntryPoint=0x%04X\n",
                tam_codigo, tam_datos, tam_extra, tam_pila, tam_const, offset_entry_point);
@@ -261,3 +265,17 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
                tam_ps, pos_const, pos_const + tam_const, pos_codigo, pos_fin_codigo);
     }
 }
+
+// Agrega cantidad de argumentos y vector, ademas de un RET al stack segment
+void inicializar_subrutina_principal(Memoria mem, InfoParamSegment info_ps){
+    int dir_fisica = get_dir_fisica(mem, mem->registros[SP]);
+
+    escribir_memoria(mem, dir_fisica, 4, info_ps.dir_argv); //  *argv a pila
+    mem->registros[SP] -= 4;
+
+    escribir_memoria(mem, dir_fisica, 4, info_ps.argc);     // *argc a pila
+    mem->registros[SP] -= 4;
+
+    escescribir_memoria(mem, dir_fisica, 4, -1);            // -1 a pila
+}
+

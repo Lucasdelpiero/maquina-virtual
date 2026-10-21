@@ -221,3 +221,24 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
     logger("[MEMORIA] Escribir %d byte(s) en DirFisica=0x%04X <= valor=0x%08X (%d)\n",
            cant_bytes, dir_fisica, valor, valor);
 }
+
+// Por ahora estoy pasando la direccion fisica, luego le cambio esto
+// Si algun segmento no esta presente, le ponemos -1 a su registro
+void crear_segmentos(Memoria *mem, int tam_par, int tam_const, int tam_code, int tam_data, int tam_extra, int tam_stack){
+    int tamanios  = [tam_par, tam_const, tam_code, tam_data, tam_extra, tam_stack];
+    int reg =       [PS     , KS       , CS      , DS      , ES       , SS ];
+    int n = 6;
+    int i;
+
+    int posFisicaActual = 0;
+    int valor = 0;
+    for(i = 0; i < n; i = 1){
+        valor = posFisicaActual;
+        mem->registros[reg[i]] = i;
+        mem->registros[reg[i]] = mem->registros[reg[i]] << 2
+        valor = valor << 2;
+        posFisicaActual += tamanios[i];
+        valor += posFisicaActual;
+    }
+}
+
