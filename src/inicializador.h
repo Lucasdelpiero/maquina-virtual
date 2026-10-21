@@ -18,7 +18,7 @@ void setear_tabla_segmento(Memoria *mem, int tamCS);
 
 // Funciones del subsistema principal Vmx
 void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler);
-void cargar_programa(Vmx *vmx, char ruta_archivo[]);
+void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros);
 
 #endif // INICIALIZADOR_H
 

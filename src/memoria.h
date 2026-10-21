@@ -21,7 +21,7 @@ int32_t get_dir_fisica(Memoria *mem, int32_t dir_logica);
 void set_registros_memoria(Memoria *mem, int32_t dir_logica, int cant_accedidos, int32_t dir_fisica, int32_t valor);
 int32_t get_valor_memoria(Memoria *mem, int32_t dir_logica, int cant_accedidos);
 int32_t set_valor_memoria(Memoria *mem, int32_t dir_logica, int32_t dato, int cant_accedidos);
-void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int tamData, int extra, int stackSegment);
+void crear_segmentos(Memoria *mem, int tam_par, int tam_const, int tam_code, int tam_data, int tam_extra, int tam_stack);
 
 // Interfaz de memoria de la maquina virtual
 uint16_t traducir_direccion(Memoria *mem, int32_t dir_logica, uint16_t cant_bytes);

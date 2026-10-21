@@ -6,6 +6,7 @@
 #include "src/disassembler.h"
 #include "src/vmi.h"
 #include "src/param_segment.h"
+#include "src/inicializador.h"
 
 #define MAX_PARAMS 50
 #define MAX_PARAM_LEN 100
@@ -169,10 +170,8 @@ int main(int argc, char *argv[]) {
     if (strlen(vmx_arch) > 0) {
         InfoParamSegment info_ps;
         info_ps = construir_param_segment(&vmx, vmx_arch, params, nro_params);
-        // TODO:
-        (void)info_ps; // Conectar aca con la parte de Lucas
-
-        cargar_programa(&vmx, vmx_arch);
+        // Se pasa el tamaño del param_segment al inicializador en cargar_programa
+        cargar_programa(&vmx, vmx_arch, info_ps.tamano);
     } else {
         if (!cargar_imagen_vmi(&vmx, vmi_arch, &mem)) {
             fprintf(stderr, "ERROR: No se pudo cargar el archivo de imagen '%s'\n", vmi_arch);

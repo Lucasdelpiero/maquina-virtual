@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <string.h>
 
+
 /*
     Tareas del inicializador:
     -Lee el archivo en binario
@@ -66,7 +67,7 @@ static int leer_uint16_be(FILE *f, int *resultado) {
     return 1;
 }
 
-void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
+void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
     FILE *f;
     uint8_t byteLeido;
     char identificador[6];
@@ -253,6 +254,9 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[]) {
         }
 
         fclose(f);
+
+        crear_segmentos(&(vmx->memoria), tam_parametros, tam_const, tam_codigo, tam_datos, tam_extra, tam_pila);
+
 
         logger("[CARGA] Archivo V2 '%s' cargado con exito.\n", ruta_archivo);
         logger("[CARGA]   Header: Code=%d, Data=%d, Extra=%d, Stack=%d, Const=%d, EntryPoint=0x%04X\n",

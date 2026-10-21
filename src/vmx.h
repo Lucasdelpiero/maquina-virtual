@@ -44,7 +44,7 @@ struct Vmx {
 };
 
 void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler);
-void cargar_programa(Vmx *vmx, char ruta_archivo[]);
+//void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros);
 int ip_valido(Vmx *vmx);
 void ejecutar_instruccion(Vmx *vmx);
 void ejecutar_vmx(Vmx *vmx);
