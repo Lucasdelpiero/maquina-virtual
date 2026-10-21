@@ -96,7 +96,7 @@ int32_t get_valor(Vmx *vmx, int tipo, int32_t dato) {
     }
     if (tipo == TIPO_MEMORIA) {
         int32_t dir_logica = calcular_direccion_logica_memoria(vmx, dato);
-        int bytes_accedidos = get_cantidad_bytes_accedidos(dato):   // Los 3 bits mas significativos indican la cant de bytes a leer
+        int bytes_accedidos = get_cantidad_bytes_accedidos(dato);   // Los 3 bits mas significativos indican la cant de bytes a leer
 
         return get_valor_memoria(&vmx->memoria, dir_logica, bytes_accedidos);
     }
@@ -128,7 +128,7 @@ void set_valor(Vmx *vmx, int tipo, int32_t dato, int32_t valor) {
         logger("[OPERANDO] Registro r%d <= %d (0x%08X)\n", dato & 0x1F, valor, valor);
     } else if (tipo == TIPO_MEMORIA) {
         int32_t dir_logica = calcular_direccion_logica_memoria(vmx, dato);
-        int bytes_accedidos = get_cantidad_bytes_accedidos(dato):   // Los 3 bits mas significativos indican la cant de bytes a leer
+        int bytes_accedidos = get_cantidad_bytes_accedidos(dato);   // Los 3 bits mas significativos indican la cant de bytes a leer
         set_valor_memoria(&vmx->memoria, dir_logica, valor, bytes_accedidos);
     } else if (tipo == TIPO_INMEDIATO) {
         logger("[ERROR][OPERANDO] Intento de escribir en operando inmediato: dato=0x%06X, valor=%d (0x%08X)\n", dato, valor, valor);

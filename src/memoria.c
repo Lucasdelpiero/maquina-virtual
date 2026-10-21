@@ -224,7 +224,7 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
 
 // Por ahora estoy pasando la direccion fisica, luego le cambio esto
 // Si algun segmento no esta presente, le ponemos -1 a su registro
-void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int tamData, int extra, int stackSegment);{
+void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int tamData, int extra, int stackSegment){
         // Segmento parametros
         int i = 0;
         int posFisicaActual = 0;
@@ -232,7 +232,7 @@ void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int ta
         if (tamPar > 0)
             mem->tabla_segmentos[i] = posFisicaActual;
         else {
-            (mem->registros)[CodigoRegistro.PS] = -1
+            (mem->registros)[PS] = -1;
         }
         posFisicaActual += tamPar;
         i++;
@@ -241,7 +241,7 @@ void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int ta
         if (tamConst > 0)
             mem->tabla_segmentos[i] = posFisicaActual;
         else {
-            (mem->registros)[CodigoRegistro.KS] = -1
+            (mem->registros)[KS] = -1;
         }
         posFisicaActual += tamPar;
         i++;
@@ -250,7 +250,7 @@ void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int ta
         if (tamConst > 0)
             mem->tabla_segmentos[i] = posFisicaActual;
         else {
-            (mem->registros)[CodigoRegistro.CS] = -1
+            (mem->registros)[CS] = -1;
         }
         posFisicaActual += tamPar;
         i++;
@@ -259,7 +259,7 @@ void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int ta
         if (tamConst > 0)
             mem->tabla_segmentos[i] = posFisicaActual;
         else {
-            (mem->registros)[CodigoRegistro.ES] = -1
+            (mem->registros)[ES] = -1;
         }
         posFisicaActual += tamPar;
         i++;
@@ -268,8 +268,7 @@ void crear_segmentos(Memoria *mem, int tamPar, int tamConst, int tamCode, int ta
         if (tamConst > 0)
             mem->tabla_segmentos[i] = posFisicaActual;
         else {
-                CodigoRegistro.
-            (mem->registros)[CodigoRegistro.SS] = -1
+            (mem->registros)[SS] = -1;
         }
         posFisicaActual += tamPar;
         i++;
