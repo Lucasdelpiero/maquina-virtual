@@ -265,3 +265,17 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
                tam_ps, pos_const, pos_const + tam_const, pos_codigo, pos_fin_codigo);
     }
 }
+
+// Agrega cantidad de argumentos y vector, ademas de un RET al stack segment
+void inicializar_subrutina_principal(Memoria mem, InfoParamSegment info_ps){
+    int dir_fisica = get_dir_fisica(mem, mem->registros[SP]);
+
+    escribir_memoria(mem, dir_fisica, 4, info_ps.dir_argv); //  *argv a pila
+    mem->registros[SP] -= 4;
+
+    escribir_memoria(mem, dir_fisica, 4, info_ps.argc);     // *argc a pila
+    mem->registros[SP] -= 4;
+
+    escescribir_memoria(mem, dir_fisica, 4, -1);            // -1 a pila
+}
+

@@ -172,6 +172,7 @@ int main(int argc, char *argv[]) {
         info_ps = construir_param_segment(&vmx, vmx_arch, params, nro_params);
         // Se pasa el tamaño del param_segment al inicializador en cargar_programa
         cargar_programa(&vmx, vmx_arch, info_ps.tamano);
+        inicializar_subrutina_principal(&(vmx->mem), info_ps);
     } else {
         if (!cargar_imagen_vmi(&vmx, vmi_arch, &mem)) {
             fprintf(stderr, "ERROR: No se pudo cargar el archivo de imagen '%s'\n", vmi_arch);

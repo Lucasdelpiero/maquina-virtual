@@ -37,7 +37,6 @@
 		<Unit filename="src/Inicializador.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="src/inicializador.h" />
 		<Unit filename="src/decodificador.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -50,6 +49,7 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/errores.h" />
+		<Unit filename="src/inicializador.h" />
 		<Unit filename="src/logger.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -66,6 +66,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/operandos.h" />
+		<Unit filename="src/param_segment.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/param_segment.h" />
 		<Unit filename="src/sys.c">
 			<Option compilerVar="CC" />
 		</Unit>
