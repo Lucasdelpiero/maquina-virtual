@@ -154,7 +154,6 @@ void op_sys(Vmx *vmx) {
             vmx->abortar("Error: Tamano invalido en SYS.");
             return;
         }
-        if (!(cantidad == -1 && num_sys == 3))
         if (cantidad <= 0) {
             logger("[ERROR][SYS] Cantidad invalida en ECX: %d (debe ser mayor a cero)\n", cantidad);
             vmx->abortar("Error: Cantidad invalida en SYS.");
@@ -216,7 +215,8 @@ void op_sys(Vmx *vmx) {
             traducir_direccion(&vmx->memoria,dir_logica, max_caracteres + 1);}
 
         // Leer caracteres hasta Enter o alcanzar el límite
-        while ((c = getchar()) != '\n' && c != EOF && (max_caracteres == -1 || i < max_caracteres)) {
+        while ((max_caracteres == -1 || i < max_caracteres) &&
+                (c = getchar()) != '\n' && c != EOF)  {
 
             uint16_t dir_fisica = traducir_direccion(&vmx->memoria, dir_logica + i, 1 );
 
