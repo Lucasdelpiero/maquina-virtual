@@ -12,6 +12,7 @@ typedef struct {
     uint8_t mem_principal[TAM_MEMORIA_PRINCIPAL];
     uint32_t *registros;
     int tam_mem_kib;
+    int offset_entry_point;
 } Memoria;
 
 // Funciones de manipulacion de memoria
