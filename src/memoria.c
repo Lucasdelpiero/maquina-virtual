@@ -232,10 +232,10 @@ void crear_segmentos(Memoria *mem, int tam_par, int tam_const, int tam_code, int
 
     int posFisicaActual = 0;
     int valor = 0;
-    for(i = 0; i < n; i = 1){
+    for(i = 0; i < n; i ++){
         valor = posFisicaActual;
         mem->registros[reg[i]] = i;
-        mem->registros[reg[i]] = mem->registros[reg[i]] << 2
+        mem->registros[reg[i]] = mem->registros[reg[i]] << 2;
         valor = valor << 2;
         posFisicaActual += tamanios[i];
         valor += posFisicaActual;

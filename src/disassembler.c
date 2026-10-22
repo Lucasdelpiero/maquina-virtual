@@ -240,15 +240,74 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
     return cant_bytes;
 }
 
-void desensamblar_programa(Vmx *vmx) {
-    int dir = 0;
-    int tam_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
+void desensamblar_ks(Vmx *vmx) {
+    int segmento = (vmx->registros[KS] >> 16) & 0xFFFF;
+
+    if (segmento >= TAM_SEGMENTOS ||
+        vmx->memoria.tabla_segmentos[segmento] == 0xFFFFFFFF)
+        return;
+
+    int descriptor = vmx->memoria.tabla_segmentos[segmento];
+    int base_ks = (descriptor >> 16) & 0xFFFF;
+    int tam_ks = descriptor & 0xFFFF;
+
+    int i = 0;
+
+    while (i < tam_ks) {
+        int inicio = i;
+        int longitud = 0;
+
+        // Calcular longitud de la cadena
+        while (inicio + longitud < tam_ks &&
+               vmx->memoria.mem_principal[base_ks + inicio + longitud] != '\0') {
+            longitud++;
+        }
+
+        printf("[%04X] ", base_ks + inicio);
+
+        // Mostrar los primeros 6 bytes en hexadecimal
+        for (int j = 0; j < longitud && j < 6; j++) {
+            printf("%02X ", vmx->memoria.mem_principal[base_ks + inicio + j]);
+        }
+
+        // Si tiene más de 6 bytes, abreviar
+        if (longitud > 6)
+            printf(".. ");
+
+        printf("| \"");
+
+        // Mostrar toda la cadena en ASCII
+        for (int j = 0; j < longitud; j++) {
+            unsigned char c = vmx->memoria.mem_principal[base_ks + inicio + j];
+
+            printf("%c", (c >= 32 && c <= 126) ? c : '.');
+        }
+
+        printf("\"\n");
+
+        // Avanzar hasta la siguiente cadena
+        i = inicio + longitud + 1;
+    }
+}
+
+void desensamblar_cs(Vmx *vmx) {
+    int segmento = (vmx->registros[CS] >> 16) & 0xFFFF;
+    int base_cs = (vmx->memoria.tabla_segmentos[segmento] >> 16) & 0xFFFF;
+    int tam_codigo = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
+    int dir = base_cs;
     char buffer[128];
 
-    while (dir < tam_codigo) {
+    while (dir < tam_codigo + base_cs) {
         int cant_bytes = desensamblar_en_direccion(vmx, dir, buffer, sizeof(buffer));
+        if (dir - base_cs == vmx->memoria.offset_entry_point)
+            printf(">");
         if (cant_bytes <= 0) break;
         printf("%s\n", buffer);
         dir += cant_bytes;
     }
+}
+
+void desensamblar_programa(Vmx *vmx) {
+    desensamblar_ks(vmx);
+    desensamblar_cs(vmx);
 }

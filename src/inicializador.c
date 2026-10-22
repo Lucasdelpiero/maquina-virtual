@@ -214,7 +214,7 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
         pos_const = tam_ps;
         pos_codigo = pos_const + tam_const;
         pos_fin_codigo = pos_codigo + tam_codigo;
-
+        vmx->memoria.offset_entry_point = offset_entry_point;
         limite_memoria = vmx->memoria.tam_mem_kib * 1024;
 
         // Valida que el proceso entre en memoria

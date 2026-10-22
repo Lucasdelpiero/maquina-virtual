@@ -50,10 +50,10 @@ void decodificar_instruccion(Vmx *vmx) {
     int32_t dato_b = 0;
     int pos;
     int tam_instruccion;
-
+    int segmento = (vmx->registros[CS] >> 16) & 0xFFFF;
     // IP es una direccion logica relativa al segmento de codigo (segmento 0)
     offset_ip = vmx->registros[IP] & 0xFFFF;
-    tam_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
+    tam_codigo = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
 
     if (offset_ip < 0 || offset_ip >= tam_codigo) {
         logger("[ERROR][DECODER] Intento de decodificar fuera del segmento de codigo: offset_ip=%d, tam_codigo=%d, IP=0x%08X\n",

@@ -148,23 +148,22 @@ void op_sys(Vmx *vmx) {
     cantidad = vmx->registros[ECX] & 0xFFFF;
     tamanio = (vmx->registros[ECX] >> 16) & 0xFFFF;
 
-
-    if (tamanio <= 0 || tamanio > 4) {
-        logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);
-        vmx->abortar("Error: Tamano invalido en SYS.");
-        return;
-    }
-    if (cantidad <= 0) {
-        logger("[ERROR][SYS] Cantidad invalida en ECX: %d (debe ser mayor a cero)\n", cantidad);
-        vmx->abortar("Error: Cantidad invalida en SYS.");
-        return;
-    }
-
-    if ((modo & 0x1F) == 0) {
-        logger("[ERROR][SYS] Mascara de formato en EAX=0x%X invalida (ningun formato valido en bits 0..4)\n", modo);
-        vmx->abortar("Error: Formato de SYS invalido.");
-        return;
-
+    if ((num_sys == 1 || num_sys == 2)) {
+        if ((tamanio <= 0) || tamanio > 4) {
+            logger("[ERROR][SYS] Tamano invalido en ECX: %d (debe ser entre 1 y 4 bytes)\n", tamanio);
+            vmx->abortar("Error: Tamano invalido en SYS.");
+            return;
+        }
+        if (cantidad <= 0) {
+            logger("[ERROR][SYS] Cantidad invalida en ECX: %d (debe ser mayor a cero)\n", cantidad);
+            vmx->abortar("Error: Cantidad invalida en SYS.");
+            return;
+        }
+        if ((modo & 0x1F) == 0) {
+            logger("[ERROR][SYS] Mascara de formato en EAX=0x%X invalida (ningun formato valido en bits 0..4)\n", modo);
+            vmx->abortar("Error: Formato de SYS invalido.");
+            return;
+        }
     }
 
     logger("[SYS] Invocando syscall %d: Modo=0x%X, DirBase=0x%08X, Cantidad=%d, Tamano=%d\n",
@@ -204,6 +203,34 @@ void op_sys(Vmx *vmx) {
             logger("[SYS] WRITE celda %d: DirLogica=0x%08X DirFisica=0x%04X Valor=%d\n",
                    i, dir_logica, dir_fisica, valor);
         }
+    }else if (num_sys == 3) {
+        // SYS 3: STRING READ
+        int32_t dir_logica = vmx->registros[EDX];
+        int32_t max_caracteres = vmx->registros[ECX];
+        int32_t i = 0;
+        int c;
+
+        // Si hay límite, validar espacio para caracteres + '\0'
+        if (max_caracteres >= 0) {
+            traducir_direccion(&vmx->memoria,dir_logica, max_caracteres + 1);}
+
+        // Leer caracteres hasta Enter o alcanzar el límite
+        while ((max_caracteres == -1 || i < max_caracteres) &&
+                (c = getchar()) != '\n' && c != EOF)  {
+
+            uint16_t dir_fisica = traducir_direccion(&vmx->memoria, dir_logica + i, 1 );
+
+            escribir_memoria(&vmx->memoria, dir_fisica, 1, c);
+            i++;
+        }
+
+        // Guardar terminador '\0'
+        uint16_t dir_fisica = traducir_direccion(
+            &vmx->memoria, dir_logica + i, 1
+        );
+
+        escribir_memoria(&vmx->memoria, dir_fisica, 1, '\0');
+
     }else if (num_sys == 4) {
         int32_t dir_logica = vmx->registros[EDX];
         int32_t caracter;
@@ -223,5 +250,7 @@ void op_sys(Vmx *vmx) {
             // Avanza una celda
             dir_logica++;
         } while (caracter != 0);
-}
+    }else if (num_sys == 15) {
+        depurador_manejar_breakpoint(vmx);
+    }
 }
