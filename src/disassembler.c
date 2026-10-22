@@ -291,14 +291,15 @@ void desensamblar_ks(Vmx *vmx) {
 }
 
 void desensamblar_cs(Vmx *vmx) {
+    int segmento = (vmx->registros[CS] >> 16) & 0xFFFF;
     int base_cs = (vmx->memoria.tabla_segmentos[segmento] >> 16) & 0xFFFF;
+    int tam_codigo = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
     int dir = base_cs;
-    int tam_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
     char buffer[128];
 
-    while (dir < tam_codigo) {
+    while (dir < tam_codigo + base_cs) {
         int cant_bytes = desensamblar_en_direccion(vmx, dir, buffer, sizeof(buffer));
-        if (dir - base_cs == vmx->offset_entry_point)
+        if (dir - base_cs == vmx->memoria.offset_entry_point)
             printf(">");
         if (cant_bytes <= 0) break;
         printf("%s\n", buffer);

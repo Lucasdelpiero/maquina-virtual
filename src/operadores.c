@@ -44,7 +44,8 @@ static void log_operacion_2(char nombre[], int32_t a, int32_t b, int32_t res, in
 
 // Realiza un salto sumando el offset al segmento de codigo (CS)
 static void ejecutar_salto(Vmx *vmx, int32_t offset) {
-    int tam_codigo = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
+    int segmento = (vmx->registros[CS] >> 16) & 0xFFFF;
+    int tam_codigo = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
     vmx->registros[IP] = vmx->registros[CS] + offset;
     logger("[EXEC] Salto ejecutado -> IP=0x%08X (offset=%d)\n", vmx->registros[IP], offset);
     if (offset < 0 || offset >= tam_codigo) {
