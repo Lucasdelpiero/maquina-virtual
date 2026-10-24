@@ -90,13 +90,13 @@ const char* obtener_mnemonico(int opc) {
 }
 
 const char* obtener_nombre_registro(int cod_reg) {
-    int operando = (cod_reg >> 6) & 0x03;
+    int operando = (cod_reg >> 5) & 0x03;
     cod_reg = cod_reg & 0x1F;
     if (cod_reg >= 0 && cod_reg < 32 && tabla_registros[cod_reg] != NULL) {
         if (!(cod_reg >= 10 && cod_reg <= 15) || operando == 0)
             return tabla_registros[cod_reg];
         else {
-            int indiceOperando = (cod_reg - 10 ) * 3 + (3 - operando);
+            int indiceOperando = (cod_reg - 10) * 3 + (3 - operando);
             return tabla_operandos_registros[indiceOperando];
         }
     }
@@ -123,27 +123,24 @@ void formatear_operando(char destino[], int tipo, int32_t dato) {
 
         if (indiceOperando == 1 || indiceOperando == 2 || indiceOperando == 4) {
             const char *operando = tabla_operandos_memoria[indiceOperando];
-            if (offset == 0) {
-                sprintf(destino, "%s[%s]", operando , obtener_nombre_registro(cod_reg));
-            } else if (offset > 0) {
-                    sprintf(destino, "%s[%s+%d]", operando , obtener_nombre_registro(cod_reg), offset);
-                } else {
-                        sprintf(destino, "%s[%s%d]", operando , obtener_nombre_registro(cod_reg), offset);
-                }
-        }
-        else
-            if (offset == 0) {
-                sprintf(destino, "[%s]" , obtener_nombre_registro(cod_reg));
-            } else if (offset > 0) {
-                sprintf(destino, "[%s+%d]" , obtener_nombre_registro(cod_reg), offset);
+            if (offset >= 0) {
+                sprintf(destino, "%s[%s+%d]", operando, obtener_nombre_registro(cod_reg), offset);
             } else {
-                sprintf(destino, "[%s%d]" , obtener_nombre_registro(cod_reg), offset);
+                sprintf(destino, "%s[%s%d]", operando, obtener_nombre_registro(cod_reg), offset);
             }
+        } else {
+            if (offset >= 0) {
+                sprintf(destino, "[%s+%d]", obtener_nombre_registro(cod_reg), offset);
+            } else {
+                sprintf(destino, "[%s%d]", obtener_nombre_registro(cod_reg), offset);
+            }
+        }
     }
 }
 
 int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_buffer) {
-    if (dir_fisica < 0 || dir_fisica >= TAM_MEMORIA_PRINCIPAL) {
+    int limite = vmx->memoria.tam_mem_kib * 1024;
+    if (dir_fisica < 0 || dir_fisica >= limite) {
         if (tam_buffer > 0) buffer[0] = '\0';
         return 0;
     }
@@ -221,7 +218,7 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
     char bytes_hex[32] = "";
     char byte_str[8];
     int i;
-    for (i = 0; i < cant_bytes && (dir_fisica + i) < TAM_MEMORIA_PRINCIPAL; i++) {
+    for (i = 0; i < cant_bytes && (dir_fisica + i) < limite; i++) {
         if (i > 0) {
             strcat(bytes_hex, " "); //dejar espacio entre palabras
         }
@@ -230,11 +227,11 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
     }
 
     if (opc == OP_STOP || opc == OP_RET) {
-        snprintf(buffer, tam_buffer, "[%04X] %-17s | %s", dir_fisica, bytes_hex, mnem);
+        snprintf(buffer, tam_buffer, "[%04X] %-24s | %s", dir_fisica, bytes_hex, mnem);
     } else if (opc <= 0x0D) {
-        snprintf(buffer, tam_buffer, "[%04X] %-17s | %s %s", dir_fisica, bytes_hex, mnem, op_a_str);
+        snprintf(buffer, tam_buffer, "[%04X] %-24s | %s %s", dir_fisica, bytes_hex, mnem, op_a_str);
     } else if (opc >= 0x0F){
-        snprintf(buffer, tam_buffer, "[%04X] %-17s | %s %s, %s", dir_fisica, bytes_hex, mnem, op_a_str, op_b_str);
+        snprintf(buffer, tam_buffer, "[%04X] %-24s | %s %s, %s", dir_fisica, bytes_hex, mnem, op_a_str, op_b_str);
     }
 
     return cant_bytes;
@@ -257,36 +254,43 @@ void desensamblar_ks(Vmx *vmx) {
         int inicio = i;
         int longitud = 0;
 
-        // Calcular longitud de la cadena
+        // Calcular longitud de la cadena hasta '\0'
         while (inicio + longitud < tam_ks &&
                vmx->memoria.mem_principal[base_ks + inicio + longitud] != '\0') {
             longitud++;
         }
 
-        printf("[%04X] ", base_ks + inicio);
+        int total_bytes = longitud + 1;
+        char hex_str[32] = "";
+        char tmp[8];
 
-        // Mostrar los primeros 6 bytes en hexadecimal
-        for (int j = 0; j < longitud && j < 6; j++) {
-            printf("%02X ", vmx->memoria.mem_principal[base_ks + inicio + j]);
+        if (total_bytes <= 7) {
+            for (int j = 0; j < total_bytes; j++) {
+                if (j > 0) strcat(hex_str, " ");
+                sprintf(tmp, "%02X", vmx->memoria.mem_principal[base_ks + inicio + j]);
+                strcat(hex_str, tmp);
+            }
+        } else {
+            for (int j = 0; j < 6; j++) {
+                if (j > 0) strcat(hex_str, " ");
+                sprintf(tmp, "%02X", vmx->memoria.mem_principal[base_ks + inicio + j]);
+                strcat(hex_str, tmp);
+            }
+            strcat(hex_str, " ..");
         }
 
-        // Si tiene más de 6 bytes, abreviar
-        if (longitud > 6)
-            printf(".. ");
+        printf(" [%04X] %-24s | \"", base_ks + inicio, hex_str);
 
-        printf("| \"");
-
-        // Mostrar toda la cadena en ASCII
+        // Mostrar toda la cadena en ASCII (sustituyendo no imprimibles por '.')
         for (int j = 0; j < longitud; j++) {
             unsigned char c = vmx->memoria.mem_principal[base_ks + inicio + j];
-
             printf("%c", (c >= 32 && c <= 126) ? c : '.');
         }
 
         printf("\"\n");
 
         // Avanzar hasta la siguiente cadena
-        i = inicio + longitud + 1;
+        i = inicio + total_bytes;
     }
 }
 
@@ -299,10 +303,12 @@ void desensamblar_cs(Vmx *vmx) {
 
     while (dir < tam_codigo + base_cs) {
         int cant_bytes = desensamblar_en_direccion(vmx, dir, buffer, sizeof(buffer));
-        if (dir - base_cs == vmx->memoria.offset_entry_point)
-            printf(">");
         if (cant_bytes <= 0) break;
-        printf("%s\n", buffer);
+        if (vmx->memoria.offset_entry_point >= 0 && (dir - base_cs) == vmx->memoria.offset_entry_point) {
+            printf(">%s\n", buffer);
+        } else {
+            printf(" %s\n", buffer);
+        }
         dir += cant_bytes;
     }
 }

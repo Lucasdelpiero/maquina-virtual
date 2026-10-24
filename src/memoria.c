@@ -66,6 +66,13 @@ int32_t get_valor_memoria(Memoria *mem, int32_t dir_logica, int bytes_accedidos)
         resultado += mem->mem_principal[dir_fisica + i];
     }
 
+    // Propagar signo para tipos de datos menores a 4 bytes segun la arquitectura
+    if (bytes_accedidos == 1) {
+        resultado = (int8_t)resultado;
+    } else if (bytes_accedidos == 2) {
+        resultado = (int16_t)resultado;
+    }
+
     // Setea registros de bus LAR, MAR, MBR
     set_registros_memoria(mem, dir_logica, bytes_accedidos, dir_fisica, resultado);
 
@@ -74,9 +81,10 @@ int32_t get_valor_memoria(Memoria *mem, int32_t dir_logica, int bytes_accedidos)
 
 // Escribe byte a byte
 void escribir_byte(Memoria *mem, int pos, uint8_t dato) {
+    int limite = mem->tam_mem_kib * 1024;
     // Validar memoria
-    if (pos >= TAM_MEMORIA_PRINCIPAL) {
-        logger("[ERROR][MEMORIA] Desborde de memoria principal: pos=%d (limite %d)\n", pos, TAM_MEMORIA_PRINCIPAL);
+    if (pos >= limite) {
+        logger("[ERROR][MEMORIA] Desborde de memoria principal: pos=%d (limite %d)\n", pos, limite);
         abortar("ERROR: Memoria principal se lleno.");
     } else if (pos < 0) {
         logger("[ERROR][MEMORIA] Acceso a posicion negativa en memoria: pos=%d\n", pos);
@@ -119,16 +127,21 @@ int32_t set_valor_memoria(Memoria *mem, int32_t dir_logica, int32_t dato, int ca
     return 0;
 }
 
-void inicializar_memoria(Memoria *mem) {
+void inicializar_memoria(Memoria *mem, int tam_mem_kib) {
     int i;
-    for (i = 0; i < TAM_MEMORIA_PRINCIPAL; i++) {
-        mem->mem_principal[i] = 0;
+    int total_bytes = tam_mem_kib * 1024;
+
+    mem->mem_principal = (uint8_t *)malloc(total_bytes);
+    if (mem->mem_principal == NULL) {
+        abortar("ERROR: No se pudo asignar memoria principal.");
     }
+
     for (i = 0; i < TAM_SEGMENTOS; i++) {
         mem->tabla_segmentos[i] = 0xFFFFFFFF;
     }
     mem->registros = NULL;
-    mem->tam_mem_kib = 16;
+    mem->tam_mem_kib = tam_mem_kib;
+    mem->offset_entry_point = -1;
 }
 
 // ============================================================================
@@ -161,10 +174,12 @@ uint16_t traducir_direccion(Memoria *mem, int32_t dir_logica, uint16_t cant_byte
 
     dir_fisica = dir_base + offset;
 
+    int limite_memoria = mem->tam_mem_kib * 1024;
+
     // Valida que la direccion fisica no sobrepase el limite de la memoria principal
-    if (dir_fisica + cant_bytes > TAM_MEMORIA_PRINCIPAL) {
-        logger("[ERROR][MEMORIA] Fallo de segmento: dir_fisica=%d + cant_bytes=%d excede memoria principal (16384). DirLogica=0x%08X\n",
-               dir_fisica, cant_bytes, dir_logica);
+    if (dir_fisica + cant_bytes > limite_memoria) {
+        logger("[ERROR][MEMORIA] Fallo de segmento: dir_fisica=%d + cant_bytes=%d excede memoria principal (%d). DirLogica=0x%08X\n",
+               dir_fisica, cant_bytes, limite_memoria, dir_logica);
         abortar("Fallo de segmento: acceso fuera de la memoria principal.");
     }
 
@@ -178,9 +193,11 @@ int32_t leer_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes) {
     int32_t resultado = 0;
     int i;
 
-    if (cant_bytes < 1 || cant_bytes > 4 || dir_fisica + cant_bytes > TAM_MEMORIA_PRINCIPAL) {
-        logger("[ERROR][MEMORIA] Lectura invalida: dir_fisica=0x%04X, cant_bytes=%d (limite 16384)\n",
-               dir_fisica, cant_bytes);
+    int limite_memoria = mem->tam_mem_kib * 1024;
+
+    if (cant_bytes < 1 || cant_bytes > 4 || dir_fisica + cant_bytes > limite_memoria) {
+        logger("[ERROR][MEMORIA] Lectura invalida: dir_fisica=0x%04X, cant_bytes=%d (limite %d)\n",
+               dir_fisica, cant_bytes, limite_memoria);
         abortar("Fallo de segmento: intento de leer fuera de la memoria fisica.");
     }
 
@@ -201,7 +218,9 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
     int offset = 0;
     int primer_byte;
 
-    if (cant_bytes < 1 || cant_bytes > 4 || dir_fisica + cant_bytes > TAM_MEMORIA_PRINCIPAL) {
+    int limite_memoria = mem->tam_mem_kib * 1024;
+
+    if (cant_bytes < 1 || cant_bytes > 4 || dir_fisica + cant_bytes > limite_memoria) {
         logger("[ERROR][MEMORIA] Escritura invalida: dir_fisica=0x%04X, cant_bytes=%d, valor=0x%08X\n",
                dir_fisica, cant_bytes, valor);
         abortar("Fallo de segmento: intento de escribir fuera de la memoria fisica.");
@@ -222,23 +241,36 @@ void escribir_memoria(Memoria *mem, uint16_t dir_fisica, uint8_t cant_bytes, int
            cant_bytes, dir_fisica, valor, valor);
 }
 
-// Por ahora estoy pasando la direccion fisica, luego le cambio esto
 // Si algun segmento no esta presente, le ponemos -1 a su registro
 void crear_segmentos(Memoria *mem, int tam_par, int tam_const, int tam_code, int tam_data, int tam_extra, int tam_stack){
-    int tamanios  = [tam_par, tam_const, tam_code, tam_data, tam_extra, tam_stack];
-    int reg =       [PS     , KS       , CS      , DS      , ES       , SS ];
+    int tamanios[] = {tam_par, tam_const, tam_code, tam_data, tam_extra, tam_stack};
+    int reg[] = {PS, KS, CS, DS, ES, SS};
     int n = 6;
     int i;
 
     int posFisicaActual = 0;
-    int valor = 0;
-    for(i = 0; i < n; i ++){
-        valor = posFisicaActual;
-        mem->registros[reg[i]] = i;
-        mem->registros[reg[i]] = mem->registros[reg[i]] << 2;
-        valor = valor << 2;
-        posFisicaActual += tamanios[i];
-        valor += posFisicaActual;
+    int entrada_tabla = 0;
+
+    for (i = 0; i < n; i++) {
+        if (tamanios[i] > 0) {
+            // Se crea entrada en la tabla de descriptores
+            // 16 bits altos = direccion base fisica, 16 bits bajos = tamano
+            mem->tabla_segmentos[entrada_tabla] = (posFisicaActual << 16) | (tamanios[i] & 0xFFFF);
+
+            // Registro del segmento con puntero logico al comienzo (offset 0)
+            mem->registros[reg[i]] = (entrada_tabla << 16);
+
+            posFisicaActual += tamanios[i];
+            entrada_tabla++;
+        } else {
+            // Segmento no presente: registro en -1 (0xFFFFFFFF)
+            mem->registros[reg[i]] = -1;
+        }
+    }
+
+    // Registro SP: apunta a SS + tamano de la pila
+    if (tam_stack > 0 && mem->registros[SS] != 0xFFFFFFFF) {
+        int seg_ss = (mem->registros[SS] >> 16) & 0xFFFF;
+        mem->registros[SP] = (seg_ss << 16) | (tam_stack & 0xFFFF);
     }
 }
-

@@ -16,7 +16,7 @@ void formatear_operando(char destino[], int tipo, int32_t dato);
 // Retorna la cantidad de bytes consumidos por la instruccion
 int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_buffer);
 
-void desensamblar_ks(Vmv *vmx);
+void desensamblar_ks(Vmx *vmx);
 
 void desensamblar_cs(Vmx *vmx);
 

@@ -15,21 +15,24 @@ Si la IP es -1 terminamos la ejecucion, retornamos 0 y quien llama a la funcion 
     segmento = (vmx->registros[IP] >> 16) & 0xFFFF;
     offset = vmx->registros[IP] & 0xFFFF;
 
-    // El codigo del proceso reside exclusivamente en el segmento 0
-    if (segmento != 0) {
-        logger("[ERROR][VMX] IP invalido: segmento=%d (el codigo solo reside en segmento 0). IP=0x%08X\n",
-               segmento, vmx->registros[IP]);
+    // El codigo del proceso reside en el segmento apuntado por CS
+    int segmento_cs = (vmx->registros[CS] >> 16) & 0xFFFF;
+    
+        if (segmento != segmento_cs || segmento >= TAM_SEGMENTOS || vmx->memoria.tabla_segmentos[segmento] == 0xFFFFFFFF) {
+        logger("[ERROR][VMX] IP invalido: segmento=%d (esperado CS=%d). IP=0x%08X\n",
+               segmento, segmento_cs, vmx->registros[IP]);
         return 0;
-    }
 ```
 
-Validamos en el registro IP de los registros, el valor del ip, asi como el LAR y demas cosas, en los 2 bytes altos se guarda el segmento y en los bajos el desplazamiento en este caso.
+Validamos en el registro IP de los registros, el valor del ip, asi como el LAR y todos los registros de tipo direcciones lógicas, en los 2 bytes altos se guarda el segmento y en los bajos el desplazamiento en este caso.
 
-Si el segmento no es cero, debemos abortar porque el segmento debe ser el cero.
+Se retorna 0 si el segmento al que apunta el ip es distinto al del code segment, si el segmento al que se intenta acceder es mayor al tamaño de la tabla de segmentos (exede/no es valido) (caso muy raro) o si el segmento CS no esta inicializado aun
+
+En la parte 2, el code segment no esta en el segmento 0 de la tabla de segmentos, en este caso debe obtenerse desde el registro CS, contiene en su parte **alta** el segmento, de ahi el desplazamiento de 16 bits.
 
 ```c
-    // El tamano del codigo esta almacenado en los 16 bits bajos de tabla_segmentos[0]
-    tamano_codigo = (int)(vmx->memoria.tabla_segmentos[0] & 0xFFFF);
+    // El tamano del codigo esta almacenado en los 16 bits bajos de tabla_segmentos[segmento_cs]
+    tamano_codigo = (int)(vmx->memoria.tabla_segmentos[segmento_cs] & 0xFFFF);
 
     // Valida que el offset este estrictamente dentro de los limites del segmento de codigo
     if (offset < 0 || offset >= tamano_codigo) {
@@ -41,7 +44,7 @@ Si el segmento no es cero, debemos abortar porque el segmento debe ser el cero.
 
 Si la base mas el offset exede el tamaño del segmento, tambien debemos cortar, es un error.
 
-### Ejecutar Instruccion
+### Ejecutar Instrucción
 
 ```c
 void ejecutar_instruccion(Vmx *vmx) {
@@ -80,6 +83,9 @@ void ejecutar_vmx(Vmx *vmx) {
 
         // 2. Ejecucion: delega la operacion cargada en OPC
         ejecutar_instruccion(vmx);
+        
+        // 3. Paso a paso: si el breakpoint anterior pidio Enter, pausa tras esta instruccion
+        depurador_verificar_paso_a_paso(vmx);
     }
 
     logger("[VMX] Ciclo de ejecucion finalizado.\n");
@@ -87,3 +93,8 @@ void ejecutar_vmx(Vmx *vmx) {
 ```
 
 Mientras la instruccion siga siendo valida, vamos decodificando desde la memoria y vamos ejecutando cada instruccion.
+
+Respecto al breakpoint, en el caso de leer la instruccion sys 0, correspondiente a este mismo, pausa la ejecucion ahi mismo.
+
+Luego de ejecutar cada instruccion, en la parte 2 de la vm, verificamos si el usuario habiendo estando en breakpoint presiono enter, en depurador_verificar_paso_a_paso(vmx);
+Si esto ocurre, vuelve a pasar esperar a que el usuario ingrese algo, si es el caso inmediato a leer el sys 0, no pide al usuario que vuelva a ingresar una tecla (seria un bug este caso).

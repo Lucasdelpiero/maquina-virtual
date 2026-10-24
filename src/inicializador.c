@@ -24,7 +24,8 @@ void setear_tabla_segmento(Memoria *mem, int tamCS) {
     int inicio_cs = 0;
     int fin_cs = tamCS;
     int inicio_ds = fin_cs;
-    int fin_ds = TAM_MEMORIA_PRINCIPAL - fin_cs; // Es en realidad el tamaño del data segment
+    int limite = mem->tam_mem_kib * 1024;
+    int fin_ds = limite - fin_cs; // Es en realidad el tamano del data segment
 
     mem->tabla_segmentos[0] = ((uint32_t)inicio_cs << 16) | (fin_cs & 0xFFFF);
     mem->tabla_segmentos[1] = ((uint32_t)inicio_ds << 16) | (fin_ds & 0xFFFF);
@@ -35,14 +36,14 @@ void setear_tabla_segmento(Memoria *mem, int tamCS) {
     }
 }
 
-void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler) {
+void inicializar_vmx(Vmx *vmx, int tam_mem_kib, int modo_debug, int modo_disassembler) {
     int i;
     vmx->modo_debug = modo_debug;
     vmx->modo_disassembler = modo_disassembler;
     vmx->abortar = abortar; //abortar esta importada desde errors.c
 
     logger_habilitar(modo_debug);
-    logger("[INIT] Inicializando VMX: modo_debug=%d, modo_disassembler=%d.\n", modo_debug, modo_disassembler);
+    logger("[INIT] Inicializando VMX: memoria=%d KiB, modo_debug=%d, modo_disassembler=%d.\n", tam_mem_kib, modo_debug, modo_disassembler);
 
     // Inicializa los 32 registros en cero
     for (i = 0; i < 32; i++) {
@@ -50,7 +51,7 @@ void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler) {
     }
 
     // Inicializa la memoria principal y tabla de descriptores
-    inicializar_memoria(&vmx->memoria);
+    inicializar_memoria(&vmx->memoria, tam_mem_kib);
     vmx->memoria.registros = (uint32_t *)vmx->registros;
 
     // Inicializa la tabla de operaciones
@@ -163,6 +164,10 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
         // IP = CS
         vmx->registros[CS] = 0x00000000;
         vmx->registros[DS] = 0x00010000; // Este 1 es porque el DS es un puntero y apunta en los primeros 16 bits al 1er segmento
+        vmx->registros[ES] = -1;
+        vmx->registros[SS] = -1;
+        vmx->registros[KS] = -1;
+        vmx->registros[PS] = -1;
         vmx->registros[IP] = vmx->registros[CS];
 
         logger("[CARGA] Archivo '%s' cargado con exito.\n", ruta_archivo);
@@ -202,12 +207,7 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
             vmx->abortar("Error: Tamano de codigo invalido en la cabecera del archivo .vmx.");
         }
 
-        // Si el registro PS no es -1 (0xFFFFFFFF) y la entrada 0 esta asignada, existe Param Segment
-        if (vmx->registros[PS] != -1 && vmx->memoria.tabla_segmentos[0] != 0xFFFFFFFF) {
-            tam_ps = vmx->memoria.tabla_segmentos[0] & 0xFFFF;
-        } else {
-            tam_ps = 0;
-        }
+        tam_ps = tam_parametros;
 
         // Organizacion de memoria fisica segun la parte 2 de la vm:
         // Param Segment -> Const Segment -> Code Segment -> Data Segment -> Extra Segment -> Stack Segment
@@ -257,6 +257,8 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
 
         crear_segmentos(&(vmx->memoria), tam_parametros, tam_const, tam_codigo, tam_datos, tam_extra, tam_pila);
 
+        // Inicializa el registro IP con el entry point
+        vmx->registros[IP] = vmx->registros[CS] | (offset_entry_point & 0xFFFF);
 
         logger("[CARGA] Archivo V2 '%s' cargado con exito.\n", ruta_archivo);
         logger("[CARGA]   Header: Code=%d, Data=%d, Extra=%d, Stack=%d, Const=%d, EntryPoint=0x%04X\n",
@@ -267,15 +269,29 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
 }
 
 // Agrega cantidad de argumentos y vector, ademas de un RET al stack segment
-void inicializar_subrutina_principal(Memoria mem, InfoParamSegment info_ps){
-    int dir_fisica = get_dir_fisica(mem, mem->registros[SP]);
+void inicializar_subrutina_principal(Vmx *vmx, InfoParamSegment info_ps) {
+    int dir_fisica;
 
-    escribir_memoria(mem, dir_fisica, 4, info_ps.dir_argv); //  *argv a pila
-    mem->registros[SP] -= 4;
+    // Verificar si hay espacio suficiente en la pila para los 3 elementos (12 bytes)
+    if (vmx->registros[SP] - 12 < vmx->registros[SS]) {
+        logger("[ERROR][PILA] Espacio insuficiente en la pila para la subrutina principal (Stack Overflow).\n");
+        vmx->abortar("Error: STACK OVERFLOW.");
+        return;
+    }
 
-    escribir_memoria(mem, dir_fisica, 4, info_ps.argc);     // *argc a pila
-    mem->registros[SP] -= 4;
+    // 1. Guardar *argv en SP-4
+    vmx->registros[SP] -= 4;
+    dir_fisica = get_dir_fisica(&vmx->memoria, vmx->registros[SP]);
+    escribir_memoria(&vmx->memoria, dir_fisica, 4, info_ps.dir_argv);
 
-    escescribir_memoria(mem, dir_fisica, 4, -1);            // -1 a pila
+    // 2. Guardar argc en SP-4
+    vmx->registros[SP] -= 4;
+    dir_fisica = get_dir_fisica(&vmx->memoria, vmx->registros[SP]);
+    escribir_memoria(&vmx->memoria, dir_fisica, 4, info_ps.argc);
+
+    // 3. Guardar RET (-1) en SP-4
+    vmx->registros[SP] -= 4;
+    dir_fisica = get_dir_fisica(&vmx->memoria, vmx->registros[SP]);
+    escribir_memoria(&vmx->memoria, dir_fisica, 4, -1);
 }
 

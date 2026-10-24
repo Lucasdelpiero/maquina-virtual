@@ -21,7 +21,7 @@ void correr_tests_etapa7(void) {
 
     printf("\n--- TESTS: DISASSEMBLER Y SYS ---\n");
 
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
 
     // 1. Mnemonicos
     ASSERT(strcmp(obtener_mnemonico(OP_SYS), "SYS") == 0, "Mnemonico OP_SYS es 'SYS'");
@@ -57,19 +57,19 @@ void correr_tests_etapa7(void) {
     vmx.memoria.mem_principal[2] = 0x0A;
     vmx.memoria.mem_principal[3] = 0x00;
     vmx.memoria.mem_principal[4] = 0x05;
-    vmx.memoria.mem_principal[5] = 0x9B;
+    vmx.memoria.mem_principal[5] = 0x1B;
 
     int bytes_add = desensamblar_en_direccion(&vmx, 0, buffer, sizeof(buffer));
     ASSERT_EQUAL(bytes_add, 6, "desensamblar_en_direccion de ADD consume 6 bytes");
     ASSERT(strstr(buffer, "ADD [DS+5], 10") != NULL, "desensamblar_en_direccion genera 'ADD [DS+5], 10'");
-    ASSERT(strcmp(buffer, "[0000] B1 00 0A 00 05 9B | ADD [DS+5], 10") == 0, "desensamblar_en_direccion coincide exactamente con la especificacion");
+    ASSERT(strcmp(buffer, "[0000] B1 00 0A 00 05 1B        | ADD [DS+5], 10") == 0, "desensamblar_en_direccion coincide con formato oficial");
 
     // STOP en direccion 6
     vmx.memoria.mem_principal[6] = OP_STOP;
     int bytes_stop = desensamblar_en_direccion(&vmx, 6, buffer, sizeof(buffer));
     ASSERT_EQUAL(bytes_stop, 1, "desensamblar_en_direccion de STOP consume 1 byte");
     ASSERT(strstr(buffer, "STOP") != NULL, "desensamblar_en_direccion genera 'STOP'");
-    ASSERT(strcmp(buffer, "[0006] 0F                | STOP") == 0, "desensamblar_en_direccion STOP formato exacto");
+    ASSERT(strcmp(buffer, "[0006] 0F                       | STOP") == 0, "desensamblar_en_direccion STOP formato exacto");
 
     // 5. Validaciones estrictas de llamadas al sistema (SYS)
     set_abortar_handler(mock_abortar_sys);

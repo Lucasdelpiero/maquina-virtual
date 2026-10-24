@@ -54,7 +54,7 @@ InfoParamSegment construir_param_segment(Vmx *vmx, char nombre_vmx[], char param
     info.tamano = tamano_total;
 
     // Direccion logica a argv: segmento 0 (16 bits MSB = 0), offset_argv (16 bits LSB)
-    info.dir_argv = (uint32_t)(offset_argv & 0xFFFF);
+    info.dir_argv = offset_argv & 0xFFFF;
 
     if (vmx != NULL) {
         int limite_memoria = vmx->memoria.tam_mem_kib * 1024;
@@ -86,7 +86,7 @@ InfoParamSegment construir_param_segment(Vmx *vmx, char nombre_vmx[], char param
         // 4. Escribir arreglo argv con los argc punteros de 4 bytes en big-endian
         for (i = 0; i < argc; i++) {
             int pos_puntero = offset_argv + (i * 4);
-            ptr_argv_elem = (uint32_t)(offsets[i] & 0xFFFF); // Entrada 0x0000 en 16 bits altos
+            ptr_argv_elem = offsets[i] & 0xFFFF; // Entrada 0x0000 en 16 bits altos
 
             vmx->memoria.mem_principal[pos_puntero]     = (uint8_t)((ptr_argv_elem >> 24) & 0xFF);
             vmx->memoria.mem_principal[pos_puntero + 1] = (uint8_t)((ptr_argv_elem >> 16) & 0xFF);
@@ -97,7 +97,7 @@ InfoParamSegment construir_param_segment(Vmx *vmx, char nombre_vmx[], char param
         // 5. Configura registro PS y la posicion 0 de la tabla de descriptores de segmentos
         // Param Segment siempre se ubica a partir de 0x00000000 (Base=0, Tamano=tamano_total)
         vmx->registros[PS] = 0x00000000;
-        vmx->memoria.tabla_segmentos[0] = (uint32_t)(tamano_total & 0xFFFF);
+        vmx->memoria.tabla_segmentos[0] = tamano_total & 0xFFFF;
 
         logger("[PARAM] Param Segment creado exitosamente.\n");
         logger("[PARAM]   Tamano total: %d bytes (Strings: %d bytes, Arreglo argv: %d bytes)\n",

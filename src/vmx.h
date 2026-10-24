@@ -43,7 +43,7 @@ struct Vmx {
     void (*abortar)(char mensaje[]);
 };
 
-void inicializar_vmx(Vmx *vmx, int modo_debug, int modo_disassembler);
+void inicializar_vmx(Vmx *vmx, int tam_mem_kib, int modo_debug, int modo_disassembler);
 //void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros);
 int ip_valido(Vmx *vmx);
 void ejecutar_instruccion(Vmx *vmx);

@@ -51,7 +51,10 @@ void decodificar_instruccion(Vmx *vmx) {
     int pos;
     int tam_instruccion;
     int segmento = (vmx->registros[CS] >> 16) & 0xFFFF;
-    // IP es una direccion logica relativa al segmento de codigo (segmento 0)
+    int base_cs = (vmx->memoria.tabla_segmentos[segmento] >> 16) & 0xFFFF;
+    int dir_fisica_ip;
+
+    // IP es una direccion logica relativa al segmento de codigo
     offset_ip = vmx->registros[IP] & 0xFFFF;
     tam_codigo = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
 
@@ -61,16 +64,17 @@ void decodificar_instruccion(Vmx *vmx) {
         vmx->abortar("Error: Intento de decodificar instruccion fuera del segmento de codigo.");
     }
 
-    primer_byte = vmx->memoria.mem_principal[offset_ip];
-    pos = offset_ip + 1;
+    dir_fisica_ip = base_cs + offset_ip;
+    primer_byte = vmx->memoria.mem_principal[dir_fisica_ip];
+    pos = dir_fisica_ip + 1;
 
     if (primer_byte == OP_STOP || primer_byte == OP_RET) {
-        // Instruccion sin operandos (STOP, 0x0F)
+        // Instruccion sin operandos (STOP, 0x0F / RET, 0x0E)
         opc = primer_byte == OP_RET ? OP_RET : OP_STOP;
         tipo_a = TIPO_NINGUNO;
         tipo_b = TIPO_NINGUNO;
     } else if (((primer_byte >> 4) & 0x03) == 0) {
-        // Instruccion con un solo operando (0x00 a 0x0A: SYS, JMP, Jcc, NOT)
+        // Instruccion con un solo operando (0x00 a 0x0D: SYS, JMP, Jcc, NOT, PUSH, POP, CALL)
         opc = primer_byte & 0x0F;
         tipo_a = (primer_byte >> 6) & 0x03;
         tipo_b = TIPO_NINGUNO;
@@ -88,7 +92,7 @@ void decodificar_instruccion(Vmx *vmx) {
         dato_a = leer_operando(vmx, tipo_a, &pos);
     }
 
-    tam_instruccion = pos - offset_ip;
+    tam_instruccion = pos - dir_fisica_ip;
 
     // Empaqueta en registros OPC, OP1 y OP2
     vmx->registros[OPC] = opc;

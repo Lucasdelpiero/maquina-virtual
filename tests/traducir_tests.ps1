@@ -44,7 +44,7 @@ if (-not (Test-Path $asmDir)) {
     exit 0
 }
 
-$asmFiles = Get-ChildItem -Path $asmDir -Filter "*.asm" -Recurse
+$asmFiles = Get-ChildItem -Path $asmDir -Filter "*.asm" -Recurse | Where-Object { $_.FullName -notmatch "[\\/]old[\\/]" }
 
 $total = $asmFiles.Count
 $traducidos = 0
@@ -69,8 +69,15 @@ foreach ($file in $asmFiles) {
         continue
     }
 
+    # Determinar version segun especificacion (v=1 para parte 1, v=2 para parte 2)
+    $esParte2 = ($relPath -like "p2_*") -or ($relPath -like "guia_de_ejercicios*") -or ($relPath -like "conflictivos\03*") -or ($relPath -like "conflictivos/03*") -or ($relPath -like "conflictivos\04*") -or ($relPath -like "conflictivos/04*")
+    $extraArgs = @()
+    if (-not $esParte2) {
+        $extraArgs += "v=1"
+    }
+
     # Traducir con vmt.exe
-    & $vmtExe $file.FullName $targetVmx -o
+    & $vmtExe $file.FullName $targetVmx @extraArgs -o
     if ($LASTEXITCODE -eq 0 -and (Test-Path $targetVmx)) {
         Write-Host "  [OK]   $relPath -> $relVmxPath" -ForegroundColor Green
         $traducidos++

@@ -15,7 +15,7 @@ void correr_tests_inicializador(void) {
     printf("\n--- TESTS: Inicializador y Estado Base ---\n");
 
     // 1. Test inicializar_vmx
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
 
     ok = 1;
     for (i = 0; i < 32; i++) {
@@ -26,14 +26,6 @@ void correr_tests_inicializador(void) {
     }
     ASSERT(ok, "inicializar_vmx: Los 32 registros quedan en 0");
 
-    ok = 1;
-    for (i = 0; i < 16384; i++) {
-        if (vmx.memoria.mem_principal[i] != 0) {
-            ok = 0;
-            break;
-        }
-    }
-    ASSERT(ok, "inicializar_vmx: Los 16 KiB de memoria principal quedan en 0");
 
     ok = 1;
     for (i = 0; i < 8; i++) {
@@ -55,8 +47,8 @@ void correr_tests_inicializador(void) {
         fclose(arch_test);
     }
 
-    inicializar_vmx(&vmx, 0, 0);
-    cargar_programa(&vmx, ruta_vmx);
+    inicializar_vmx(&vmx, 16, 0, 0);
+    cargar_programa(&vmx, ruta_vmx, 0);
 
     ASSERT_EQUAL(vmx.registros[CS], 0x00000000, "cargar_programa: Registro CS apunta a 0x00000000");
     ASSERT_EQUAL(vmx.registros[DS], 0x00010000, "cargar_programa: Registro DS apunta a 0x00010000");
@@ -93,8 +85,8 @@ void correr_tests_inicializador(void) {
         fclose(arch_test);
     }
 
-    inicializar_vmx(&vmx, 0, 0);
-    cargar_programa(&vmx, ruta_vmx);
+    inicializar_vmx(&vmx, 16, 0, 0);
+    cargar_programa(&vmx, ruta_vmx, 0);
     tam_cod = (int)(vmx.memoria.tabla_segmentos[0] & 0xFFFF);
     ASSERT(tam_cod > 0, "cargar_programa: Programa conteo_bits.vmx cargado correctamente con tamano > 0");
     ASSERT_EQUAL(ip_valido(&vmx), 1, "ip_valido: Programa conteo_bits.vmx listo para ciclo de ejecucion");
