@@ -24,6 +24,36 @@ static void mock_abortar_p2(char mensaje[]) {
     longjmp(s_jmp_abort_p2, 1);
 }
 
+static void resolver_ruta_p2(const char relativa[], char ruta_final[]) {
+    FILE *f;
+    strcpy(ruta_final, relativa);
+    f = fopen(ruta_final, "rb");
+    if (f != NULL) {
+        fclose(f);
+        return;
+    }
+    sprintf(ruta_final, "tests/%s", relativa);
+    f = fopen(ruta_final, "rb");
+    if (f != NULL) {
+        fclose(f);
+        return;
+    }
+    sprintf(ruta_final, "../%s", relativa);
+    f = fopen(ruta_final, "rb");
+    if (f != NULL) {
+        fclose(f);
+        return;
+    }
+    strcpy(ruta_final, relativa);
+}
+
+static void cargar_y_preparar_p2(Vmx *vmx, const char ruta[], InfoParamSegment info_ps) {
+    cargar_programa(vmx, (char*)ruta, info_ps.tamano);
+    if (vmx->registros[SS] != -1) {
+        inicializar_subrutina_principal(vmx, info_ps);
+    }
+}
+
 // Crea un archivo binario V2 temporal valido para pruebas
 static void crear_binario_v2_temporal(const char ruta[], int tam_datos, int tam_extra, int tam_pila) {
     FILE *f = fopen(ruta, "wb");
@@ -101,7 +131,7 @@ void test_binarios_parte2(void) {
     // =========================================================================
     // 1. Tests de Param Segment (src/param_segment.c)
     // =========================================================================
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
 
     // Caso A: Sin parametros (-p no provisto o nro_params == 0)
     info = construir_param_segment(&vmx, "prog.vmx", params, 0);
@@ -119,7 +149,7 @@ void test_binarios_parte2(void) {
     strcpy(params[1], "01");
     strcpy(params[2], "2");
 
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
     info = construir_param_segment(&vmx, "prog.vmx", params, 3);
 
     ASSERT_EQUAL(info.existe, 1, "Param Segment con parametros: existe == 1");
@@ -154,7 +184,7 @@ void test_binarios_parte2(void) {
     // Strings: app.vmx\0 (8 bytes) + arg_unico\0 (10 bytes) = 18 bytes
     // argv: 2 punteros de 4 bytes = 8 bytes. Total = 26 bytes.
     strcpy(params[0], "arg_unico");
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
     info = construir_param_segment(&vmx, "app.vmx", params, 1);
     ASSERT_EQUAL(info.existe, 1, "Param Segment con 1 parametro: existe == 1");
     ASSERT_EQUAL(info.tamano, 26, "Param Segment con 1 parametro: tamano total == 26 bytes");
@@ -168,7 +198,7 @@ void test_binarios_parte2(void) {
     // 2. Tests de Imagenes VMI (src/vmi.c)
     // =========================================================================
     strcpy(ruta_temp_vmi, "tests/test_temp.vmi");
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
 
     // Modificamos estado representativo
     vmx.registros[EAX] = 0x12345678;
@@ -200,7 +230,7 @@ void test_binarios_parte2(void) {
     }
 
     // Restaurar sobre otra instancia limpia
-    inicializar_vmx(&vmx2, 0, 0);
+    inicializar_vmx(&vmx2, 16, 0, 0);
     tam_kib_leido = 0;
     ASSERT_EQUAL(cargar_imagen_vmi(&vmx2, ruta_temp_vmi, &tam_kib_leido), 1, "cargar_imagen_vmi: Carga imagen correctamente");
     ASSERT_EQUAL(tam_kib_leido, 16, "VMI leido: Tamano de memoria en cabecera es 16 KiB");
@@ -226,7 +256,7 @@ void test_binarios_parte2(void) {
         fclose(f_test);
         ASSERT_EQUAL((int)tam_arch_8, 8360, "Archivo VMI de 8 KiB tiene tamano exacto (8360 bytes)");
     }
-    inicializar_vmx(&vmx2, 0, 0);
+    inicializar_vmx(&vmx2, 16, 0, 0);
     tam_kib_leido = 0;
     ASSERT_EQUAL(cargar_imagen_vmi(&vmx2, ruta_temp_vmi, &tam_kib_leido), 1, "cargar_imagen_vmi: Carga imagen de 8 KiB correctamente");
     ASSERT_EQUAL(tam_kib_leido, 8, "VMI leido: Tamano de memoria en cabecera es 8 KiB");
@@ -273,8 +303,8 @@ void test_binarios_parte2(void) {
 
     // Caso A: Carga V2 sin Param Segment (-p ausente)
     // La distribucion fisica debe ser: Const Segment en 0, Code Segment en 13
-    inicializar_vmx(&vmx, 0, 0);
-    cargar_programa(&vmx, ruta_temp_v2);
+    inicializar_vmx(&vmx, 16, 0, 0);
+    cargar_programa(&vmx, ruta_temp_v2, 0);
 
     // Const Segment (13 bytes) cargado a partir de la direccion fisica 0
     ASSERT(strncmp((char*)&vmx.memoria.mem_principal[0], "Hola mundo!", 11) == 0,
@@ -288,12 +318,12 @@ void test_binarios_parte2(void) {
     strcpy(params[0], "prueba");
     strcpy(params[1], "01");
     strcpy(params[2], "2");
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
     info = construir_param_segment(&vmx, "prog.vmx", params, 3);
     ASSERT_EQUAL(info.tamano, 37, "Param Segment construido con tamano 37");
 
     // Ahora cargamos el programa V2
-    cargar_programa(&vmx, ruta_temp_v2);
+    cargar_programa(&vmx, ruta_temp_v2, info.tamano);
 
     // 1. Validar que Param Segment NO fue destruido ni sobreescrito en 0..36
     ASSERT(strcmp((char*)&vmx.memoria.mem_principal[0], "prog.vmx") == 0,
@@ -319,7 +349,7 @@ void test_binarios_parte2(void) {
     // C.1 Archivo inexistente
     s_aborto_llamado = 0;
     if (setjmp(s_jmp_abort_p2) == 0) {
-        cargar_programa(&vmx, "tests/no_existe_archivo.vmx");
+        cargar_programa(&vmx, "tests/no_existe_archivo.vmx", 0);
     }
     ASSERT_EQUAL(s_aborto_llamado, 1, "cargar_programa: Archivo inexistente dispara abortar");
 
@@ -329,7 +359,7 @@ void test_binarios_parte2(void) {
     crear_archivo_bytes(ruta_temp_err, bad_ident, 6);
     s_aborto_llamado = 0;
     if (setjmp(s_jmp_abort_p2) == 0) {
-        cargar_programa(&vmx, ruta_temp_err);
+        cargar_programa(&vmx, ruta_temp_err, 0);
     }
     ASSERT_EQUAL(s_aborto_llamado, 1, "cargar_programa: Identificador invalido dispara abortar");
     remove(ruta_temp_err);
@@ -340,7 +370,7 @@ void test_binarios_parte2(void) {
     crear_archivo_bytes(ruta_temp_err, bad_ver, 6);
     s_aborto_llamado = 0;
     if (setjmp(s_jmp_abort_p2) == 0) {
-        cargar_programa(&vmx, ruta_temp_err);
+        cargar_programa(&vmx, ruta_temp_err, 0);
     }
     ASSERT_EQUAL(s_aborto_llamado, 1, "cargar_programa: Version incompatible dispara abortar");
     remove(ruta_temp_err);
@@ -350,7 +380,7 @@ void test_binarios_parte2(void) {
     crear_binario_v2_temporal(ruta_temp_err, 30000, 0, 0);
     s_aborto_llamado = 0;
     if (setjmp(s_jmp_abort_p2) == 0) {
-        cargar_programa(&vmx, ruta_temp_err);
+        cargar_programa(&vmx, ruta_temp_err, 0);
     }
     ASSERT_EQUAL(s_aborto_llamado, 1, "cargar_programa: Binario que excede memoria disponible dispara abortar");
     remove(ruta_temp_err);
@@ -360,7 +390,7 @@ void test_binarios_parte2(void) {
     // =========================================================================
     // 4. Tests de ip_valido Dinamico con Segmento CS (src/vmx.c)
     // =========================================================================
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
     // Asignamos CS al segmento 2 con tamano 50 bytes (base 100)
     vmx.registros[CS] = 0x00020000;
     vmx.memoria.tabla_segmentos[2] = ((uint32_t)100 << 16) | 50;
@@ -397,7 +427,7 @@ void test_binarios_parte2(void) {
     // Sin archivo VMI configurado, no debe intentar abrir ni escribir archivo
     vmi_configurar_archivo(NULL);
     ASSERT_EQUAL(vmi_tiene_archivo(), 0, "vmi_tiene_archivo() retorna 0 cuando no hay archivo configurado");
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
     depurador_manejar_breakpoint(&vmx); // Debe ignorarse limpiamente segun la especificacion
 
     // Con archivo VMI configurado
@@ -409,4 +439,183 @@ void test_binarios_parte2(void) {
     // depurador_verificar_paso_a_paso sin modo paso a paso activo es no-op seguro
     depurador_verificar_paso_a_paso(&vmx);
     ASSERT(1, "depurador_verificar_paso_a_paso: Ejecuta limpiamente sin modo activo");
+
+    // =========================================================================
+    // 6. Ejecucion de Binarios Reales de Parte II (.vmx)
+    // =========================================================================
+    char ruta_bin[260];
+    InfoParamSegment ps_vacia = {0, 0, 0, 0xFFFFFFFF};
+
+    // Basicos Parte 2
+    // 01_push_pop_reg.vmx: PUSH EAX (12345), POP EBX
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/01_push_pop_reg.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EBX, 12345, "01_push_pop_reg.vmx EBX = 12345");
+
+    // 02_push_pop_inmediato.vmx: PUSH 9876, POP ECX
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/02_push_pop_inmediato.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, ECX, 9876, "02_push_pop_inmediato.vmx ECX = 9876");
+
+    // 03_push_pop_memoria.vmx: PUSH [0] (555), POP [4], MOV EAX, [4]
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/03_push_pop_memoria.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EAX, 555, "03_push_pop_memoria.vmx EAX = 555");
+
+    // 04_sectores_registro_al_ah.vmx: AL = 0x12, AH = 0x34 -> EAX = 0x3412
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/04_sectores_registro_al_ah.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EAX, 0x3412, "04_sectores_registro_al_ah.vmx EAX = 0x3412");
+
+    // 05_sectores_registro_ax.vmx: AX = 0x5678 -> EAX = 0x5678
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/05_sectores_registro_ax.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EAX, 0x5678, "05_sectores_registro_ax.vmx EAX = 0x5678");
+
+    // 06_modificador_memoria_byte.vmx: b[0] = 0x41, AL = b[0] -> AL = 0x41
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/06_modificador_memoria_byte.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    ASSERT_EQUAL(vmx.registros[EAX] & 0xFF, 0x41, "06_modificador_memoria_byte.vmx AL = 0x41");
+
+    // 07_modificador_memoria_word.vmx: w[0] = 0x1234, AX = w[0] -> AX = 0x1234
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/07_modificador_memoria_word.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    ASSERT_EQUAL(vmx.registros[EAX] & 0xFFFF, 0x1234, "07_modificador_memoria_word.vmx AX = 0x1234");
+
+    // 08_modificador_memoria_long.vmx: l[0] = 0x11223344, EBX = l[0]
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/08_modificador_memoria_long.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EBX, 0x11223344, "08_modificador_memoria_long.vmx EBX = 0x11223344");
+
+    // 09_call_ret_minimo.vmx: CALL sub_simple -> EAX = 777, RET
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/09_call_ret_minimo.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EAX, 777, "09_call_ret_minimo.vmx EAX = 777");
+
+    // 11_constante_equ_inmediata.vmx: EAX = 100 + 0x20 = 132
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_basicos/11_constante_equ_inmediata.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EAX, 132, "11_constante_equ_inmediata.vmx EAX = 132");
+
+    // Completos Parte 2
+    // 01_subrutinas_anidadas.vmx: main -> func_a (10) -> func_b (25) = 35 en EDX
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_completos/01_subrutinas_anidadas.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EDX, 35, "01_subrutinas_anidadas.vmx EDX = 35");
+
+    // 02_pasaje_parametros_pila.vmx: sumar(27, 15) = 42 en EBX
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_completos/02_pasaje_parametros_pila.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EBX, 42, "02_pasaje_parametros_pila.vmx EBX = 42");
+
+    // 04_manipulacion_strings_memoria.vmx: longitud de 'Arquitectura2026' = 16
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_completos/04_manipulacion_strings_memoria.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EAX, 16, "04_manipulacion_strings_memoria.vmx longitud = 16");
+
+    // 05_subrutina_factorial_recursivo.vmx: 5! = 120
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_completos/05_subrutina_factorial_recursivo.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EBX, 120, "05_subrutina_factorial_recursivo.vmx 5! = 120");
+
+    // 06_subrutina_dig_max_oficial.vmx: dig_max(3842) = 8
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_completos/06_subrutina_dig_max_oficial.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EBX, 8, "06_subrutina_dig_max_oficial.vmx max_dig = 8");
+
+    // 07_modificadores_combinados.vmx: EL pasa de 0x0F a 0x1E
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_completos/07_modificadores_combinados.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    ASSERT_EQUAL(vmx.registros[EEX] & 0xFF, 0x1E, "07_modificadores_combinados.vmx EL = 0x1E");
+
+    // Avanzados Parte 2
+    // 01_arbol_binario_extra.vmx: buscar 60 -> EBX = 1, buscar 99 -> ECX = 0
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_avanzados/01_arbol_binario_extra.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EBX, 1, "01_arbol_binario_extra.vmx busqueda 60 exitosa (1)");
+    assert_registro(&vmx, ECX, 0, "01_arbol_binario_extra.vmx busqueda 99 fallida (0)");
+
+    // 02_arbol_n_ario_extra.vmx: suma de todos los nodos del arbol n-ario = 47
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/p2_avanzados/02_arbol_n_ario_extra.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EBX, 47, "02_arbol_n_ario_extra.vmx suma arbol n-ario = 47");
+
+    // Guia de ejercicios: Ejercicio 11 (elim_valor: valor 4 devuelve 5)
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/guia_de_ejercicios/ej11/main_ej11.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EAX, 5, "Guia Ejercicio 11: elim_valor para valor 4 devuelve 5 eliminados");
+
+    // Guia de ejercicios: Ejercicio 12 (cant_caminos en digrafo aciclico)
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/guia_de_ejercicios/ej12/main_ej12.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    ejecutar_vmx(&vmx);
+    assert_registro(&vmx, EAX, 3, "Guia Ejercicio 12: cant_caminos en DAG devuelve 3 caminos");
+
+    // Casos conflictivos Parte 2
+    set_abortar_handler(mock_abortar_p2);
+
+    // 03_stack_overflow.vmx
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/conflictivos/03_stack_overflow.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    s_aborto_llamado = 0;
+    s_ultimo_mensaje_abort[0] = '\0';
+    if (setjmp(s_jmp_abort_p2) == 0) {
+        ejecutar_vmx(&vmx);
+    }
+    ASSERT(s_aborto_llamado == 1, "03_stack_overflow.vmx dispara llamada a abortar");
+    ASSERT(strstr(s_ultimo_mensaje_abort, "STACK OVERFLOW") != NULL, "Mensaje reporta 'STACK OVERFLOW'");
+
+    // 04_stack_underflow.vmx
+    inicializar_vmx(&vmx, 16, 0, 0);
+    resolver_ruta_p2("vmx/conflictivos/04_stack_underflow.vmx", ruta_bin);
+    cargar_y_preparar_p2(&vmx, ruta_bin, ps_vacia);
+    s_aborto_llamado = 0;
+    s_ultimo_mensaje_abort[0] = '\0';
+    if (setjmp(s_jmp_abort_p2) == 0) {
+        ejecutar_vmx(&vmx);
+    }
+    ASSERT(s_aborto_llamado == 1, "04_stack_underflow.vmx dispara llamada a abortar");
+    ASSERT(strstr(s_ultimo_mensaje_abort, "STACK UNDERFLOW") != NULL, "Mensaje reporta 'STACK UNDERFLOW'");
+
+    set_abortar_handler(NULL);
 }

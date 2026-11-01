@@ -14,7 +14,7 @@ Primero que nada tenemos como parametro el tipo, ejecutamos diferente logica seg
 ```c
     if (tipo == TIPO_REGISTRO) {
         // 1 byte: codigo de registro en los 5 bits menos significativos
-        dato = (int32_t)(vmx->memoria.mem_principal[p] & 0x1F);
+        dato = (int32_t)(vmx->memoria.mem_principal[p]);
         *pos = p + 1;
     } else if (tipo == TIPO_INMEDIATO) {
         // 2 bytes big-endian: valor entero de 16 bits
@@ -24,7 +24,7 @@ Primero que nada tenemos como parametro el tipo, ejecutamos diferente logica seg
     } else if (tipo == TIPO_MEMORIA) {
         // 3 bytes: 2 bytes de offset big-endian + 1 byte con codigo de registro (5 bits bajos)
         uint16_t offset = ((uint16_t)vmx->memoria.mem_principal[p] << 8) | (uint16_t)vmx->memoria.mem_principal[p + 1];
-        uint8_t cod_reg = vmx->memoria.mem_principal[p + 2] & 0x1F;
+        uint8_t cod_reg = vmx->memoria.mem_principal[p + 2];
         dato = ((int32_t)offset << 8) | (int32_t)cod_reg;
         *pos = p + 3;
     }
@@ -35,7 +35,13 @@ Segun el tipo del operando, extraemos el valor del operando leyendo de la memori
 
 ### Decodificar Instruccion
 
+Antes en la parte 1, el code segment estaba directamente al principio de la memoria, asi para acceder al code segment partiamos del cero y avanzabamos el offset_ip simplemente.
+Ahora en la parte 2 esto cambia y primero hay que encontrar la base del code segment, usando la tabla de segmentos, y de esa base añadir el offset_ip para obtener asi la instrucción.
+
 ```c
+    int base_cs = (vmx->memoria.tabla_segmentos[segmento] >> 16) & 0xFFFF;
+    int dir_fisica_ip;
+    
     // IP es una direccion logica relativa al segmento de codigo (segmento 0)
     offset_ip = vmx->registros[IP] & 0xFFFF;
     tam_codigo = (int)(vmx->memoria.tabla_segmentos[0] & 0xFFFF);
@@ -45,6 +51,12 @@ Segun el tipo del operando, extraemos el valor del operando leyendo de la memori
                offset_ip, tam_codigo, vmx->registros[IP]);
         vmx->abortar("Error: Intento de decodificar instruccion fuera del segmento de codigo.");
     }
+```
+
+```c
+    dir_fisica_ip = base_cs + offset_ip;
+    primer_byte = vmx->memoria.mem_principal[dir_fisica_ip];
+    pos = dir_fisica_ip + 1;
 ```
 
 Validamos la ip que toca procesar primero que nada, puede ser mayor al tamaño del codigo y debemos abortar.
@@ -83,7 +95,7 @@ Dependiendo el tipo de **codigo de operacion** leemos los tipos de los operandos
 
 El codigo de operacion y los tipos de los operandos estan en el **byte de cabecera**
 
-`tam_instruccion = pos - offset_ip;`
+`tam_instruccion = pos - dir_fisica_ip;`
 
 La posicion, pos es donde estamos parados en la memoria actualmente, el offset es la posicion de la instruccion que estamos ejecutando ahora mismo.
 

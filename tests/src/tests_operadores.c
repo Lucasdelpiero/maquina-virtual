@@ -22,7 +22,7 @@ void correr_tests_operadores(void) {
     Vmx vmx;
     printf("\n--- TESTS DE OPERADORES Y CODIGO DE CONDICION ---\n");
 
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
 
     // 1. Caso de prueba especificacion: MOV EAX, -1 -> N=1, Z=0, C=0, V=0
     set_operando_reg(&vmx, OP1, TIPO_REGISTRO, EAX);

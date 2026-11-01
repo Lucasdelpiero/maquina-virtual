@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include "../../src/vmx.h"
+#include "../../src/inicializador.h"
 
 // Contadores globales del runner de pruebas
 extern int tests_ejecutados;

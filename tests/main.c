@@ -13,6 +13,7 @@ void correr_tests_operadores(void);
 void correr_tests_etapa7(void);
 void correr_tests_binarios(void);
 void test_binarios_parte2(void);
+void correr_tests_refuerzo(void);
 
 int main(void) {
     printf("==================================================\n");
@@ -26,6 +27,7 @@ int main(void) {
     correr_tests_etapa7();
     correr_tests_binarios();
     test_binarios_parte2();
+    correr_tests_refuerzo();
 
     // Resumen final
     printf("\n==================================================\n");

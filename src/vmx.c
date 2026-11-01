@@ -94,8 +94,10 @@ void ejecutar_vmx(Vmx *vmx) {
         // 2. Ejecucion: delega la operacion cargada en OPC
         ejecutar_instruccion(vmx);
 
-        // 3. Paso a paso: si el breakpoint anterior pidio Enter, pausa tras esta instruccion
-        depurador_verificar_paso_a_paso(vmx);
+        // 3. Paso a paso: si el proceso sigue activo y se pidio paso a paso, pausa tras esta instruccion
+        if (ip_valido(vmx)) {
+            depurador_verificar_paso_a_paso(vmx);
+        }
     }
 
     logger("[VMX] Ciclo de ejecucion finalizado.\n");

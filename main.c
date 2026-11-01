@@ -47,13 +47,10 @@ static int parsear_argumentos(int argc, char *argv[], char vmx_arch[], char vmi_
     if (pos < argc && tiene_extension_vmx(argv[pos])) {
         strcpy(vmx_arch, argv[pos]);
         pos++;
-        // Si vino .vmx, a continuacion puede venir opcionalmente .vmi
-        if (pos < argc && tiene_extension_vmi(argv[pos])) {
-            strcpy(vmi_arch, argv[pos]);
-            pos++;
-        }
-    } else if (pos < argc && tiene_extension_vmi(argv[pos])) {
-        // En caso de que solo se provea archivo de imagen .vmi
+    }
+
+    // Si vino .vmx, a continuacion puede venir opcionalmente .vmi, o bien proveerse unicamente la imagen .vmi
+    if (pos < argc && tiene_extension_vmi(argv[pos])) {
         strcpy(vmi_arch, argv[pos]);
         pos++;
     }
@@ -69,7 +66,7 @@ static int parsear_argumentos(int argc, char *argv[], char vmx_arch[], char vmi_
     if (pos < argc && strncmp(argv[pos], "m=", 2) == 0) {
         m_val = atoi(&argv[pos][2]);
         if (m_val <= 0) {
-            fprintf(stderr, "ERROR: Tamano de memoria invalido: '%s'\n", argv[pos]);
+            fprintf(stderr, "ERROR: Tamano de memoria invalido: '%s' (debe ser mayor a 0 KiB)\n", argv[pos]);
             return 0;
         }
         *mem = m_val;
@@ -120,7 +117,7 @@ static int parsear_argumentos(int argc, char *argv[], char vmx_arch[], char vmi_
         return 0;
     }
 
-    // Regla de especificacion: si no hay archivo .vmx, se ignoran los parametros -p
+    // Si no hay archivo .vmx, se ignoran los parametros -p
     if (strlen(vmx_arch) == 0 && *nro_params > 0) {
         *nro_params = 0;
     }
@@ -148,7 +145,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    inicializar_vmx(&vmx, modo_debug, modo_disassembler);
+    inicializar_vmx(&vmx, mem, modo_debug, modo_disassembler);
 
     logger("[MAIN] Parametros configurados:\n");
     logger("[MAIN]   Archivo VMX: '%s'\n", strlen(vmx_arch) > 0 ? vmx_arch : "(ninguno)");
@@ -161,7 +158,6 @@ int main(int argc, char *argv[]) {
         logger("[MAIN]     Parametro %d: '%s'\n", i, params[i]);
     }
 
-    vmx.memoria.tam_mem_kib = mem;
     if (strlen(vmi_arch) > 0) {
         vmi_configurar_archivo(vmi_arch);
     }
@@ -170,9 +166,11 @@ int main(int argc, char *argv[]) {
     if (strlen(vmx_arch) > 0) {
         InfoParamSegment info_ps;
         info_ps = construir_param_segment(&vmx, vmx_arch, params, nro_params);
-        // Se pasa el tamaño del param_segment al inicializador en cargar_programa
+        // Se pasa el tamano del param_segment al inicializador en cargar_programa
         cargar_programa(&vmx, vmx_arch, info_ps.tamano);
-        inicializar_subrutina_principal(&(vmx->mem), info_ps);
+        if (vmx.registros[SS] != -1) {
+            inicializar_subrutina_principal(&vmx, info_ps);
+        }
     } else {
         if (!cargar_imagen_vmi(&vmx, vmi_arch, &mem)) {
             fprintf(stderr, "ERROR: No se pudo cargar el archivo de imagen '%s'\n", vmi_arch);

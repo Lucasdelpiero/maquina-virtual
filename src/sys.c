@@ -138,6 +138,12 @@ void op_sys(Vmx *vmx) {
     int32_t dir_logica;
     uint16_t dir_fisica;
     int32_t valor;
+    int32_t max_caracteres;
+    int32_t caracter;
+    int c;
+    int segmento;
+    int offset_base;
+    int32_t dir_actual;
 
     tipo_a = get_tipo(vmx->registros[OP1]);
     dato_a = get_dato(vmx->registros[OP1]);
@@ -174,7 +180,7 @@ void op_sys(Vmx *vmx) {
         #else
             system("clear");
         #endif
-    }else if (num_sys == 1) {
+    } else if (num_sys == 1) {
         // SYS 1: READ
         for (i = 0; i < cantidad; i++) {
             dir_logica = dir_base + (i * tamanio);
@@ -203,54 +209,55 @@ void op_sys(Vmx *vmx) {
             logger("[SYS] WRITE celda %d: DirLogica=0x%08X DirFisica=0x%04X Valor=%d\n",
                    i, dir_logica, dir_fisica, valor);
         }
-    }else if (num_sys == 3) {
+    } else if (num_sys == 3) {
         // SYS 3: STRING READ
-        int32_t dir_logica = vmx->registros[EDX];
-        int32_t max_caracteres = vmx->registros[ECX];
-        int32_t i = 0;
-        int c;
+        dir_logica = vmx->registros[EDX];
+        max_caracteres = vmx->registros[ECX];
+        segmento = (dir_logica >> 16) & 0xFFFF;
+        offset_base = dir_logica & 0xFFFF;
+        i = 0;
 
-        // Si hay límite, validar espacio para caracteres + '\0'
-        if (max_caracteres >= 0) {
-            traducir_direccion(&vmx->memoria,dir_logica, max_caracteres + 1);}
-
-        // Leer caracteres hasta Enter o alcanzar el límite
+        // Leer caracteres hasta Enter o alcanzar el limite
         while ((max_caracteres == -1 || i < max_caracteres) &&
-                (c = getchar()) != '\n' && c != EOF)  {
-
-            uint16_t dir_fisica = traducir_direccion(&vmx->memoria, dir_logica + i, 1 );
-
+               (c = getchar()) != '\n' && c != EOF) {
+            dir_actual = (segmento << 16) | ((offset_base + i) & 0xFFFF);
+            dir_fisica = traducir_direccion(&vmx->memoria, dir_actual, 1);
             escribir_memoria(&vmx->memoria, dir_fisica, 1, c);
+            set_registros_memoria(&vmx->memoria, dir_actual, 1, dir_fisica, c);
             i++;
         }
 
         // Guardar terminador '\0'
-        uint16_t dir_fisica = traducir_direccion(
-            &vmx->memoria, dir_logica + i, 1
-        );
-
+        dir_actual = (segmento << 16) | ((offset_base + i) & 0xFFFF);
+        dir_fisica = traducir_direccion(&vmx->memoria, dir_actual, 1);
         escribir_memoria(&vmx->memoria, dir_fisica, 1, '\0');
+        set_registros_memoria(&vmx->memoria, dir_actual, 1, dir_fisica, '\0');
 
-    }else if (num_sys == 4) {
-        int32_t dir_logica = vmx->registros[EDX];
-        int32_t caracter;
-        uint16_t dir_fisica;
+    } else if (num_sys == 4) {
+        // SYS 4: STRING WRITE
+        dir_logica = vmx->registros[EDX];
+        segmento = (dir_logica >> 16) & 0xFFFF;
+        offset_base = dir_logica & 0xFFFF;
+        i = 0;
 
         do {
-            // Traduce y valida la dirección
-            dir_fisica = traducir_direccion(&vmx->memoria, dir_logica, 1);
+            dir_actual = (segmento << 16) | ((offset_base + i) & 0xFFFF);
+            // Traduce y valida la direccion
+            dir_fisica = traducir_direccion(&vmx->memoria, dir_actual, 1);
 
             // Lee un byte
             caracter = leer_memoria(&vmx->memoria, dir_fisica, 1);
+            set_registros_memoria(&vmx->memoria, dir_actual, 1, dir_fisica, caracter);
 
-            // Imprime si no es '\0'
-            if (caracter != 0)
+            if (caracter != 0) {
                 printf("%c", (char)caracter);
-
-            // Avanza una celda
-            dir_logica++;
+            }
+            i++;
         } while (caracter != 0);
-    }else if (num_sys == 15) {
+
+    } else if (num_sys == 15) {
         depurador_manejar_breakpoint(vmx);
+    } else {
+        logger("[WARN][SYS] Llamada al sistema no implementada o desconocida: %d (0x%X)\n", num_sys, num_sys);
     }
 }

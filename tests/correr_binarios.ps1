@@ -51,7 +51,10 @@ if (-not (Test-Path $vmxDir)) {
     exit 1
 }
 
-$vmxFiles = Get-ChildItem -Path $vmxDir -Filter "*.vmx" -Recurse | Where-Object { $_.Name -like "$Filter.vmx" -or $_.Name -like "$Filter" }
+$vmxFiles = Get-ChildItem -Path $vmxDir -Filter "*.vmx" -Recurse | Where-Object {
+    ($_.Name -like "$Filter.vmx" -or $_.Name -like "$Filter") -and
+    ($_.FullName -notmatch "guia_de_ejercicios" -or $_.Name -like "main_*")
+}
 
 $total = $vmxFiles.Count
 $exitosos = 0

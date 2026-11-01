@@ -42,15 +42,16 @@ static void log_operacion_2(char nombre[], int32_t a, int32_t b, int32_t res, in
            FLAG_N(cc), FLAG_Z(cc), FLAG_C(cc), FLAG_V(cc));
 }
 
-// Realiza un salto sumando el offset al segmento de codigo (CS)
+// Realiza un salto cargando el offset en los 16 bits bajos de IP preservando el segmento de codigo (CS)
 static void ejecutar_salto(Vmx *vmx, int32_t offset) {
     int segmento = (vmx->registros[CS] >> 16) & 0xFFFF;
     int tam_codigo = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
-    vmx->registros[IP] = vmx->registros[CS] + offset;
-    logger("[EXEC] Salto ejecutado -> IP=0x%08X (offset=%d)\n", vmx->registros[IP], offset);
-    if (offset < 0 || offset >= tam_codigo) {
+    int offset_real = offset & 0xFFFF;
+    vmx->registros[IP] = vmx->registros[CS] | offset_real;
+    logger("[EXEC] Salto ejecutado -> IP=0x%08X (offset=%d)\n", vmx->registros[IP], offset_real);
+    if (offset_real >= tam_codigo) {
         logger("[WARN][EXEC] Destino de salto fuera del segmento de codigo: offset=%d (tam_codigo=%d). El ciclo se detendra.\n",
-               offset, tam_codigo);
+               offset_real, tam_codigo);
     }
 }
 
@@ -199,8 +200,10 @@ void op_not(Vmx *vmx) {
 void op_push(Vmx *vmx) {
     int tipo_a = get_tipo(vmx->registros[OP1]);
     int32_t dato_a = get_dato(vmx->registros[OP1]);
+    int32_t valor;
+    uint16_t dir;
 
-    // Primero decrementar SP
+    // Primero decrementar SP en 4
     vmx->registros[SP] -= 4;
 
     // Verificar STACK OVERFLOW
@@ -210,18 +213,21 @@ void op_push(Vmx *vmx) {
         return;
     }
 
-    int32_t valor = get_valor(vmx, tipo_a, dato_a);
+    valor = get_valor(vmx, tipo_a, dato_a);
 
-    // Traducir dirección lógica a física
-    uint16_t dir = traducir_direccion(&vmx->memoria, vmx->registros[SP], 4);
+    // Traducir direccion logica a fisica
+    dir = traducir_direccion(&vmx->memoria, vmx->registros[SP], 4);
 
     // Guardar 4 bytes en la pila
     escribir_memoria(&vmx->memoria, dir, 4, valor);
+    set_registros_memoria(&vmx->memoria, vmx->registros[SP], 4, dir, valor);
 }
 
 int32_t sacar_pila(Vmx *vmx) {
     int segmento = (vmx->registros[SS] >> 16) & 0xFFFF;
     int tamanioStack = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
+    uint16_t dir;
+    int32_t valor;
 
     // Verificar STACK UNDERFLOW
     if (vmx->registros[SP] < vmx->registros[SS] ||
@@ -231,8 +237,9 @@ int32_t sacar_pila(Vmx *vmx) {
         return 0;
     }
 
-    uint16_t dir = traducir_direccion(&vmx->memoria, vmx->registros[SP], 4);
-    int32_t valor = (int32_t) leer_memoria(&vmx->memoria, dir, 4);
+    dir = traducir_direccion(&vmx->memoria, vmx->registros[SP], 4);
+    valor = leer_memoria(&vmx->memoria, dir, 4);
+    set_registros_memoria(&vmx->memoria, vmx->registros[SP], 4, dir, valor);
     vmx->registros[SP] += 4;
 
     return valor;
@@ -241,16 +248,35 @@ int32_t sacar_pila(Vmx *vmx) {
 void op_pop(Vmx *vmx) {
     int tipo_a = get_tipo(vmx->registros[OP1]);
     int32_t dato_a = get_dato(vmx->registros[OP1]);
-    int32_t valor = sacar_pila(vmx);
+    int segmento = (vmx->registros[SS] >> 16) & 0xFFFF;
+    int tamanioStack = vmx->memoria.tabla_segmentos[segmento] & 0xFFFF;
+    uint16_t dir;
+    int32_t valor;
 
+    // Verificar STACK UNDERFLOW
+    if (vmx->registros[SP] < vmx->registros[SS] ||
+        vmx->registros[SP] + 4 > vmx->registros[SS] + tamanioStack) {
+        logger("[ERROR][PILA] STACK UNDERFLOW.\n");
+        vmx->abortar("Error: STACK UNDERFLOW.");
+        return;
+    }
+
+    // 1. Extraer 4 bytes desde el tope de la pila
+    dir = traducir_direccion(&vmx->memoria, vmx->registros[SP], 4);
+    valor = leer_memoria(&vmx->memoria, dir, 4);
+    set_registros_memoria(&vmx->memoria, vmx->registros[SP], 4, dir, valor);
+
+    // 2. Asignar el valor extraido al primer operando antes de incrementar SP
     set_valor(vmx, tipo_a, dato_a, valor);
+
+    // 3. Incrementar el valor de SP en 4
+    vmx->registros[SP] += 4;
 }
 
 void op_call(Vmx *vmx) {
     int tipo_a = get_tipo(vmx->registros[OP1]);
     int32_t dato_a = get_dato(vmx->registros[OP1]);
     int32_t a = get_valor(vmx, tipo_a, dato_a);
-    
     int32_t op1_original = vmx->registros[OP1];
 
     vmx->registros[OP1] = (TIPO_REGISTRO << 24) | IP;
@@ -622,9 +648,9 @@ void op_ldl(Vmx *vmx) {
     int32_t b = get_valor(vmx, tipo_b, dato_b);
 
     // LDL: carga los 16 bits bajos preservando los altos; no modifica CC
-    combinar_mitad(vmx, tipo_a, dato_a, (uint16_t)(b & 0xFFFF), 0);
+    combinar_mitad(vmx, tipo_a, dato_a, b & 0xFFFF, 0);
     logger("[EXEC] LDL: cargando 16 bits bajos (0x%04X) en destino (antiguo=0x%08X nuevo=0x%08X)\n",
-           (uint16_t)(b & 0xFFFF), a, get_valor(vmx, tipo_a, dato_a));
+           b & 0xFFFF, a, get_valor(vmx, tipo_a, dato_a));
 }
 
 void op_ldh(Vmx *vmx) {
@@ -637,9 +663,9 @@ void op_ldh(Vmx *vmx) {
     int32_t b = get_valor(vmx, tipo_b, dato_b);
 
     // LDH: carga los 16 bits altos preservando los bajos; no modifica CC
-    combinar_mitad(vmx, tipo_a, dato_a, (uint16_t)(b & 0xFFFF), 1);
+    combinar_mitad(vmx, tipo_a, dato_a, b & 0xFFFF, 1);
     logger("[EXEC] LDH: cargando 16 bits altos (0x%04X) en destino (antiguo=0x%08X nuevo=0x%08X)\n",
-           (uint16_t)(b & 0xFFFF), a, get_valor(vmx, tipo_a, dato_a));
+           b & 0xFFFF, a, get_valor(vmx, tipo_a, dato_a));
 }
 
 void op_rnd(Vmx *vmx) {

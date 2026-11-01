@@ -23,7 +23,7 @@ void correr_tests_operandos(void) {
 
     printf("\n--- TESTS: Modulo Operandos y Codigo de Condicion ---\n");
 
-    inicializar_vmx(&vmx, 0, 0);
+    inicializar_vmx(&vmx, 16, 0, 0);
 
     // 1. Tests get_tipo y get_dato
     // Empaqueta: Tipo 1 (registro) en byte alto, dato 10 (EAX) en 24 bits bajos
@@ -82,7 +82,7 @@ void correr_tests_operandos(void) {
 
     // Test de las funciones con struct Memoria
     Memoria mem_test;
-    inicializar_memoria(&mem_test);
+    inicializar_memoria(&mem_test, 16);
     mem_test.tabla_segmentos[1] = (100 << 16) | 1000;
     set_valor_memoria(&mem_test, 0x00010006, 0x59B, 3);
     int32_t val_mem_test = get_valor_memoria(&mem_test, 0x00010006, 3);

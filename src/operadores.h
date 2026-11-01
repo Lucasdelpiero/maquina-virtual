@@ -28,6 +28,8 @@ void op_call(Vmx *vmx);
 void op_ret(Vmx *vmx);
 void op_stop(Vmx *vmx);
 
+int32_t sacar_pila(Vmx *vmx);
+
 void op_mov(Vmx *vmx);
 void op_add(Vmx *vmx);
 void op_sub(Vmx *vmx);

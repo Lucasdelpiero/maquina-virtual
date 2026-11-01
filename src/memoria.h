@@ -4,19 +4,19 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define TAM_MEMORIA_PRINCIPAL 16384 // Van a ser 16KiB
+#define TAM_MEMORIA_DEFECTO 16384 // 16 KiB por defecto
 #define TAM_SEGMENTOS 8
 
 typedef struct {
     uint32_t tabla_segmentos[TAM_SEGMENTOS];
-    uint8_t mem_principal[TAM_MEMORIA_PRINCIPAL];
+    uint8_t *mem_principal;
     uint32_t *registros;
     int tam_mem_kib;
     int offset_entry_point;
 } Memoria;
 
 // Funciones de manipulacion de memoria
-void inicializar_memoria(Memoria *mem);
+void inicializar_memoria(Memoria *mem, int tam_mem_kib);
 void escribir_byte(Memoria *mem, int pos, uint8_t dato);
 int32_t get_dir_fisica(Memoria *mem, int32_t dir_logica);
 void set_registros_memoria(Memoria *mem, int32_t dir_logica, int cant_accedidos, int32_t dir_fisica, int32_t valor);

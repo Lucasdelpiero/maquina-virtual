@@ -112,7 +112,7 @@ int guardar_imagen_vmi(Vmx *vmx, char ruta_archivo[], int tam_mem_kib) {
 
     // 2. Registros (32 x 4 = 128 bytes)
     for (i = 0; i < 32; i++) {
-        escribir_uint32_be(f, (uint32_t)vmx->registros[i]);
+        escribir_uint32_be(f, vmx->registros[i]);
     }
 
     // 3. Tabla de descriptores de segmentos (8 x 4 = 32 bytes)
@@ -187,7 +187,19 @@ int cargar_imagen_vmi(Vmx *vmx, char ruta_archivo[], int *tam_mem_kib) {
     if (tam_mem_kib != NULL) {
         *tam_mem_kib = mem_kib;
     }
+
+    // Si el tamano en la imagen difiere de la memoria alocada, se redimensiona
+    if (mem_kib != vmx->memoria.tam_mem_kib) {
+        uint8_t *nueva_mem = (uint8_t *)realloc(vmx->memoria.mem_principal, mem_kib * 1024);
+        if (nueva_mem == NULL) {
+            fclose(f);
+            logger("[ERROR][VMI] No se pudo reasignar memoria principal a %d KiB\n", mem_kib);
+            return 0;
+        }
+        vmx->memoria.mem_principal = nueva_mem;
+    }
     vmx->memoria.tam_mem_kib = mem_kib;
+
 
     // 4. Leer registros (32 registros x 4 bytes cada uno)
     for (i = 0; i < 32; i++) {
@@ -196,7 +208,7 @@ int cargar_imagen_vmi(Vmx *vmx, char ruta_archivo[], int *tam_mem_kib) {
             logger("[ERROR][VMI] Archivo truncado al leer registro %d en '%s'\n", i, ruta_archivo);
             return 0;
         }
-        vmx->registros[i] = (int32_t)valor32;
+        vmx->registros[i] = valor32;
     }
 
     // 5. Leer tabla de descriptores de segmentos (8 entradas x 4 bytes)
