@@ -281,7 +281,7 @@ void desensamblar_ks(Vmx *vmx) {
             strcat(hex_str, " ..");
         }
 
-        printf("[%04X] %-24s | \"", base_ks + inicio, hex_str);
+        printf(" [%04X] %-24s | \"", base_ks + inicio, hex_str);
 
         // Mostrar toda la cadena en ASCII (sustituyendo no imprimibles por '.')
         for (int j = 0; j < longitud; j++) {
@@ -309,7 +309,7 @@ void desensamblar_cs(Vmx *vmx) {
         if (vmx->memoria.offset_entry_point >= 0 && (dir - base_cs) == vmx->memoria.offset_entry_point) {
             printf(">%s\n", buffer);
         } else {
-            printf("%s\n", buffer);
+            printf(" %s\n", buffer);
         }
         dir += cant_bytes;
     }
