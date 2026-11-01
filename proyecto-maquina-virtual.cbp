@@ -74,6 +74,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/sys.h" />
+		<Unit filename="src/vmi.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/vmi.h" />
 		<Unit filename="src/vmx.c">
 			<Option compilerVar="CC" />
 		</Unit>
