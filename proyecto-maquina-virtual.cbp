@@ -34,13 +34,14 @@
 		<Unit filename="main.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="src/Inicializador.c">
-			<Option compilerVar="CC" />
-		</Unit>
 		<Unit filename="src/decodificador.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/decodificador.h" />
+		<Unit filename="src/depurador.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/depurador.h" />
 		<Unit filename="src/disassembler.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -49,6 +50,9 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/errores.h" />
+		<Unit filename="src/inicializador.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="src/inicializador.h" />
 		<Unit filename="src/logger.c">
 			<Option compilerVar="CC" />
@@ -74,6 +78,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/sys.h" />
+		<Unit filename="src/vmi.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/vmi.h" />
 		<Unit filename="src/vmx.c">
 			<Option compilerVar="CC" />
 		</Unit>

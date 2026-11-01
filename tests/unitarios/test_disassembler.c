@@ -135,6 +135,25 @@ void test_disassembler_suite(void) {
     TEST_ASSERT_EQUAL(bytes_add, 3, "desensamblar_en_direccion: ADD consume 3 bytes");
     TEST_ASSERT(strstr(desens, "ADD EAX, EBX") != NULL, "desensamblar_en_direccion: buffer contiene ADD EAX, EBX");
 
+    // Verificacion de formato exacto: debe iniciar con '[' (sin espacio previo)
+    TEST_ASSERT_EQUAL(desens[0], '[', "desensamblar_en_direccion: formato inicia con '[' sin espacio previo");
+
+    // RET (1 byte)
+    vmx.memoria.mem_principal[8] = OP_RET;
+    int bytes_ret = desensamblar_en_direccion(&vmx, 8, desens, sizeof(desens));
+    TEST_ASSERT_EQUAL(bytes_ret, 1, "desensamblar_en_direccion: RET consume 1 byte");
+    TEST_ASSERT(strstr(desens, "RET") != NULL, "desensamblar_en_direccion: buffer contiene RET sin operandos");
+    TEST_ASSERT_EQUAL(desens[0], '[', "desensamblar_en_direccion: RET inicia con '['");
+
+    // RND reg, inm (opcode 0x1F >= 0x10 -> dos operandos)
+    vmx.memoria.mem_principal[9] = 0x9F; // [inm][reg][1][1111]
+    vmx.memoria.mem_principal[10] = 0x00;
+    vmx.memoria.mem_principal[11] = 0x64; // 100
+    vmx.memoria.mem_principal[12] = EAX;
+    int bytes_rnd = desensamblar_en_direccion(&vmx, 9, desens, sizeof(desens));
+    TEST_ASSERT_EQUAL(bytes_rnd, 4, "desensamblar_en_direccion: RND consume 4 bytes");
+    TEST_ASSERT(strstr(desens, "RND EAX, 100") != NULL, "desensamblar_en_direccion: buffer contiene RND EAX, 100 con dos operandos");
+
     // Direccion fuera de limite devuelve 0
     int bytes_out = desensamblar_en_direccion(&vmx, 20000, desens, sizeof(desens));
     TEST_ASSERT_EQUAL(bytes_out, 0, "desensamblar_en_direccion: direccion fuera de limites devuelve 0");

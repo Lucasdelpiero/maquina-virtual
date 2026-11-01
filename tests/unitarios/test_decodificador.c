@@ -145,5 +145,10 @@ void test_decodificador_suite(void) {
     vmx.registros[IP] = 0x000000C8; // offset 200 == tam_codigo (fuera de rango 0..199)
     TEST_ASSERT_ABORTA(decodificar_instruccion(&vmx), "decodificar_instruccion: IP fuera de segmento aborta");
 
+    // Test 12: Byte con formato de 0 operandos (bits 7..4 = 0000) pero opcode invalido (ej: 0x01)
+    vmx.registros[IP] = 0x00000020;
+    vmx.memoria.mem_principal[32] = 0x01;
+    TEST_ASSERT_ABORTA(decodificar_instruccion(&vmx), "decodificar_instruccion: opcode invalido sin operandos aborta");
+
     free(vmx.memoria.mem_principal);
 }

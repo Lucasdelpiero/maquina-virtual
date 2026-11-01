@@ -68,9 +68,15 @@ void decodificar_instruccion(Vmx *vmx) {
     primer_byte = vmx->memoria.mem_principal[dir_fisica_ip];
     pos = dir_fisica_ip + 1;
 
-    if (primer_byte == OP_STOP || primer_byte == OP_RET) {
+    if ((primer_byte >> 4) == 0) {
         // Instruccion sin operandos (STOP, 0x0F / RET, 0x0E)
-        opc = primer_byte == OP_RET ? OP_RET : OP_STOP;
+        opc = primer_byte & 0x0F;
+        if (opc != OP_STOP && opc != OP_RET) {
+            logger("[ERROR][DECODER] Instruccion sin operandos desconocida o invalida: 0x%02X en IP=0x%08X\n",
+                   opc, vmx->registros[IP]);
+            vmx->abortar("Error: Instruccion invalida o codigo de operacion inexistente.");
+            return;
+        }
         tipo_a = TIPO_NINGUNO;
         tipo_b = TIPO_NINGUNO;
     } else if (((primer_byte >> 4) & 0x03) == 0) {

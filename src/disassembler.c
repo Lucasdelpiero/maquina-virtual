@@ -153,10 +153,12 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
     int32_t dato_a = 0;
     int32_t dato_b = 0;
 
-    if (primer_byte == OP_STOP || primer_byte == OP_RET) {
-        opc = primer_byte == OP_STOP ? OP_STOP : OP_RET;
+    if ((primer_byte >> 4) == 0) {
+        opc = primer_byte & 0x0F;
+        tipo_a = TIPO_NINGUNO;
+        tipo_b = TIPO_NINGUNO;
     } else if (((primer_byte >> 4) & 0x03) == 0) {
-        opc = primer_byte & 0x1F;
+        opc = primer_byte & 0x0F;
         tipo_a = (primer_byte >> 6) & 0x03;
 
         if (tipo_a == TIPO_REGISTRO) {
@@ -230,7 +232,7 @@ int desensamblar_en_direccion(Vmx *vmx, int dir_fisica, char buffer[], int tam_b
         snprintf(buffer, tam_buffer, "[%04X] %-24s | %s", dir_fisica, bytes_hex, mnem);
     } else if (opc <= 0x0D) {
         snprintf(buffer, tam_buffer, "[%04X] %-24s | %s %s", dir_fisica, bytes_hex, mnem, op_a_str);
-    } else if (opc >= 0x0F){
+    } else if (opc >= 0x10){
         snprintf(buffer, tam_buffer, "[%04X] %-24s | %s %s, %s", dir_fisica, bytes_hex, mnem, op_a_str, op_b_str);
     }
 
@@ -279,7 +281,7 @@ void desensamblar_ks(Vmx *vmx) {
             strcat(hex_str, " ..");
         }
 
-        printf(" [%04X] %-24s | \"", base_ks + inicio, hex_str);
+        printf("[%04X] %-24s | \"", base_ks + inicio, hex_str);
 
         // Mostrar toda la cadena en ASCII (sustituyendo no imprimibles por '.')
         for (int j = 0; j < longitud; j++) {
@@ -307,7 +309,7 @@ void desensamblar_cs(Vmx *vmx) {
         if (vmx->memoria.offset_entry_point >= 0 && (dir - base_cs) == vmx->memoria.offset_entry_point) {
             printf(">%s\n", buffer);
         } else {
-            printf(" %s\n", buffer);
+            printf("%s\n", buffer);
         }
         dir += cant_bytes;
     }

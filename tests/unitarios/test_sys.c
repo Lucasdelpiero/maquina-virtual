@@ -95,12 +95,25 @@ void test_sys_suite(void) {
     vmx.registros[EDX] = 0x00000032; // offset 50
     op_sys(&vmx);
     TEST_ASSERT(1, "op_sys STRING WRITE: recorre e imprime cadena hasta caracter nulo");
+    TEST_ASSERT_EQUAL(vmx.registros[LAR], 0x00000036, "op_sys STRING WRITE: LAR actualizado al terminador (offset 54)");
+    TEST_ASSERT_EQUAL(vmx.registros[MAR], (1 << 16) | 54, "op_sys STRING WRITE: MAR tiene cant_bytes=1 y dir_fisica=54");
+    TEST_ASSERT_EQUAL(vmx.registros[MBR], 0, "op_sys STRING WRITE: MBR contiene '\\0'");
 
     // Caso 2: Cadena vacia (primer caracter '\0')
     vmx.memoria.mem_principal[60] = '\0';
     vmx.registros[EDX] = 0x0000003C; // offset 60
     op_sys(&vmx);
     TEST_ASSERT(1, "op_sys STRING WRITE: cadena vacia procesada de forma inmediata");
+    TEST_ASSERT_EQUAL(vmx.registros[LAR], 0x0000003C, "op_sys STRING WRITE: cadena vacia actualiza LAR");
+
+    // Caso 3: String sin terminador dentro del limite del segmento aborta por fallo de segmento
+    vmx.memoria.tabla_segmentos[2] = (500 << 16) | 5; // segmento 2, tamano 5 bytes
+    vmx.registros[EDX] = 0x00020000; // segmento 2, offset 0
+    int k;
+    for (k = 0; k < 5; k++) {
+        vmx.memoria.mem_principal[500 + k] = 'X';
+    }
+    TEST_ASSERT_ABORTA(op_sys(&vmx), "op_sys STRING WRITE: string sin '\\0' aborta por fallo de segmento");
 
     // Test 5: SYS 15 (BREAKPOINT) sin archivo VMI
     vmx.registros[OP1] = (TIPO_INMEDIATO << 24) | 15; // SYS 15

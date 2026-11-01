@@ -98,12 +98,31 @@ void test_vmi_suite(void) {
     fclose(f_bad_ver);
     TEST_ASSERT_EQUAL(cargar_imagen_vmi(&vmx_cargar, "bad_ver.vmi", NULL), 0, "cargar_imagen_vmi: version != 1 rechazada");
 
+    // Test 7: Redimension dinamica de memoria (guardar con 2 KiB y cargar en VMX inicializada en 1 KiB)
+    Vmx vmx_grande;
+    inicializar_vmx(&vmx_grande, 2, 0, 0); // 2 KiB
+    vmx_grande.memoria.mem_principal[2047] = 0x77; // Byte en el limite superior de 2 KiB
+    char ruta_resize[] = "test_resize.vmi";
+    guardar_imagen_vmi(&vmx_grande, ruta_resize, 2);
+
+    Vmx vmx_pequena;
+    inicializar_vmx(&vmx_pequena, 1, 0, 0); // Inicializada en 1 KiB
+    int mem_resize_leida = 0;
+    int cargado_resize_ok = cargar_imagen_vmi(&vmx_pequena, ruta_resize, &mem_resize_leida);
+    TEST_ASSERT_EQUAL(cargado_resize_ok, 1, "cargar_imagen_vmi: carga exitosa de imagen con memoria mayor");
+    TEST_ASSERT_EQUAL(mem_resize_leida, 2, "cargar_imagen_vmi: tamano leido actualizado a 2 KiB");
+    TEST_ASSERT_EQUAL(vmx_pequena.memoria.tam_mem_kib, 2, "cargar_imagen_vmi: tam_mem_kib interno actualizado a 2");
+    TEST_ASSERT_EQUAL(vmx_pequena.memoria.mem_principal[2047], 0x77, "cargar_imagen_vmi: byte en 2047 restaurado tras realloc");
+
     // Limpieza de archivos temporales
     remove(ruta_temp);
     remove("bad_magic.vmi");
     remove("trunc.vmi");
     remove("bad_ver.vmi");
+    remove(ruta_resize);
 
     free(vmx_guardar.memoria.mem_principal);
     free(vmx_cargar.memoria.mem_principal);
+    free(vmx_grande.memoria.mem_principal);
+    free(vmx_pequena.memoria.mem_principal);
 }
