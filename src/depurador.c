@@ -41,14 +41,14 @@ void depurador_manejar_breakpoint(Vmx *vmx) {
             exit(0);
         }
 
+        opcion = linea[0];
+
         // Si presiono unicamente la tecla Enter (paso a paso)
-        if (linea[0] == '\n' || linea[0] == '\r') {
+        if (opcion == '\n' || opcion == '\r') {
             modo_paso_a_paso = 1;
             logger("[BREAKPOINT] Ejecutando siguiente instruccion (paso a paso)...\n");
             break;
         }
-
-        opcion = linea[0];
 
         // Opcion 'g' o 'G': continuar normalmente hasta el proximo breakpoint o fin
         if (opcion == 'g' || opcion == 'G') {

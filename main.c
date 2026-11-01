@@ -47,13 +47,10 @@ static int parsear_argumentos(int argc, char *argv[], char vmx_arch[], char vmi_
     if (pos < argc && tiene_extension_vmx(argv[pos])) {
         strcpy(vmx_arch, argv[pos]);
         pos++;
-        // Si vino .vmx, a continuacion puede venir opcionalmente .vmi
-        if (pos < argc && tiene_extension_vmi(argv[pos])) {
-            strcpy(vmi_arch, argv[pos]);
-            pos++;
-        }
-    } else if (pos < argc && tiene_extension_vmi(argv[pos])) {
-        // En caso de que solo se provea archivo de imagen .vmi
+    }
+
+    // Si vino .vmx, a continuacion puede venir opcionalmente .vmi, o bien proveerse unicamente la imagen .vmi
+    if (pos < argc && tiene_extension_vmi(argv[pos])) {
         strcpy(vmi_arch, argv[pos]);
         pos++;
     }
@@ -68,8 +65,8 @@ static int parsear_argumentos(int argc, char *argv[], char vmx_arch[], char vmi_
     // 2. Lectura opcional de parametro de memoria m=M
     if (pos < argc && strncmp(argv[pos], "m=", 2) == 0) {
         m_val = atoi(&argv[pos][2]);
-        if (m_val <= 0 || m_val > 64) {
-            fprintf(stderr, "ERROR: Tamano de memoria invalido: '%s' (debe ser entre 1 y 64 KiB)\n", argv[pos]);
+        if (m_val <= 0) {
+            fprintf(stderr, "ERROR: Tamano de memoria invalido: '%s' (debe ser mayor a 0 KiB)\n", argv[pos]);
             return 0;
         }
         *mem = m_val;

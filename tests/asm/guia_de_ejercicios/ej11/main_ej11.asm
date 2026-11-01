@@ -7,168 +7,304 @@ JMP main
 
 ; =========================================================================
 ; PROGRAMA PRINCIPAL DE PRUEBA: EJERCICIO 11
-; Construye en DS:
-; Lista enlazada con 3 arboles n-arios:
-;   - Arbol 1: Raiz con valor 4 (elimina raiz y promueve 1er hijo), 1 hijo hoja con valor 4.
-;   - Arbol 2: Arbol compuesto unicamente por nodos con valor 4 (raiz 4 y su unico hijo 4).
-;              Al eliminarse ambos, el arbol queda vacio y se desvincula el nodo de la lista.
-;   - Arbol 3: Raiz con valor 30, un hijo intermedio con valor 4 que tiene a su vez un hijo con valor 50.
+; Ejemplo oficial de la catedra (verificado con imagen):
+;
+; Lista Original:
+;   - Arbol 1 (Raiz 1):
+;       Hijo 2 -> Nieto 1
+;       Hijo 3 -> Nieto 4 (hoja, elimina #1), Nieto 5
+;   - Arbol 2 (Raiz 5):
+;       Hijo 2
+;       Hijo 4 (elimina #2, se promueve su hijo 1) -> Nieto 1
+;   - Arbol 3 (Raiz 4):
+;       Nodo 4 aislado (elimina #3, arbol vacio -> se elimina celda de la lista)
+;   - Arbol 4 (Raiz 2):
+;       Hijo 2
+;       Hijo 4 (elimina #4, se promueve hijo 1 y engarza nietos 6, 7) -> Nietos 1, 6, 7
+;       Hijo 4 (hoja, elimina #5)
+;
 ; Total de nodos con valor 4 eliminados = 5.
-; EAX debe terminar con valor 5.
+; EAX debe devolver 5.
 ; =========================================================================
 
 main:           MOV BP, SP
 
                 ; ---------------------------------------------------------
-                ; 1. Construir Arbol 1
-                ; Nodos Arbol:
-                ; T1_1 (offset 80):  val = 10, hijos = C1_3 (offset 160)
-                ; T1_2 (offset 96):  val = 4,  hijos = NULL
-                ; T1_3 (offset 112): val = 20, hijos = NULL
-                ; T1   (offset 64):  val = 4,  hijos = C1_1 (offset 128)
-                ; Nodos Hijos de T1:
-                ; C1_1 (offset 128): arbol = T1_1 (offset 80),  sig = C1_2 (offset 144)
-                ; C1_2 (offset 144): arbol = T1_2 (offset 96),  sig = C1_3 (offset 160)
-                ; C1_3 (offset 160): arbol = T1_3 (offset 112), sig = NULL
+                ; 1. Construir Arbol 1 (Raiz 1 en DS+64)
+                ; N1_2_1 (offset 120): val = 1, hijos = NULL
+                ; C1_2_1 (offset 112): arbol = N1_2_1, sig = NULL
+                ; N1_2   (offset 96):  val = 2, hijos = C1_2_1
+                ; N1_3_1 (offset 160): val = 4, hijos = NULL (Elimina 4 #1)
+                ; N1_3_2 (offset 168): val = 5, hijos = NULL
+                ; C1_3_2 (offset 152): arbol = N1_3_2, sig = NULL
+                ; C1_3_1 (offset 144): arbol = N1_3_1, sig = C1_3_2
+                ; N1_3   (offset 128): val = 3, hijos = C1_3_1
+                ; C1_2   (offset 88):  arbol = N1_3,   sig = NULL
+                ; C1_1   (offset 80):  arbol = N1_2,   sig = C1_2
+                ; N1     (offset 64):  val = 1, hijos = C1_1
                 ; ---------------------------------------------------------
 
-                ; T1_1: val = 10, hijos = NULL
-                MOV l[DS+80], 10
-                MOV l[DS+84], -1
+                ; N1_2_1: val = 1, hijos = NULL
+                MOV l[DS+120], 1
+                MOV l[DS+124], -1
 
-                ; T1_2: val = 4, hijos = NULL
-                MOV l[DS+96], 4
-                MOV l[DS+100], -1
-
-                ; T1_3: val = 20, hijos = NULL
-                MOV l[DS+112], 20
+                ; C1_2_1: arbol = N1_2_1, sig = NULL
+                MOV EAX, DS
+                ADD EAX, 120
+                MOV l[DS+112], EAX
                 MOV l[DS+116], -1
 
-                ; C1_3: arbol = T1_3, sig = NULL
+                ; N1_2: val = 2, hijos = C1_2_1
+                MOV l[DS+96], 2
                 MOV EAX, DS
                 ADD EAX, 112
-                MOV l[DS+160], EAX
+                MOV l[DS+100], EAX
+
+                ; N1_3_1: val = 4, hijos = NULL
+                MOV l[DS+160], 4
                 MOV l[DS+164], -1
 
-                ; C1_2: arbol = T1_2, sig = C1_3
+                ; N1_3_2: val = 5, hijos = NULL
+                MOV l[DS+168], 5
+                MOV l[DS+172], -1
+
+                ; C1_3_2: arbol = N1_3_2, sig = NULL
                 MOV EAX, DS
-                ADD EAX, 96
-                MOV l[DS+144], EAX
+                ADD EAX, 168
+                MOV l[DS+152], EAX
+                MOV l[DS+156], -1
+
+                ; C1_3_1: arbol = N1_3_1, sig = C1_3_2
                 MOV EAX, DS
                 ADD EAX, 160
+                MOV l[DS+144], EAX
+                MOV EAX, DS
+                ADD EAX, 152
                 MOV l[DS+148], EAX
 
-                ; C1_1: arbol = T1_1, sig = C1_2
-                MOV EAX, DS
-                ADD EAX, 80
-                MOV l[DS+128], EAX
+                ; N1_3: val = 3, hijos = C1_3_1
+                MOV l[DS+128], 3
                 MOV EAX, DS
                 ADD EAX, 144
                 MOV l[DS+132], EAX
 
-                ; T1 (Raiz Arbol 1): val = 4, hijos = C1_1
-                MOV l[DS+64], 4
+                ; C1_2: arbol = N1_3, sig = NULL
                 MOV EAX, DS
                 ADD EAX, 128
+                MOV l[DS+88], EAX
+                MOV l[DS+92], -1
+
+                ; C1_1: arbol = N1_2, sig = C1_2
+                MOV EAX, DS
+                ADD EAX, 96
+                MOV l[DS+80], EAX
+                MOV EAX, DS
+                ADD EAX, 88
+                MOV l[DS+84], EAX
+
+                ; N1: val = 1, hijos = C1_1
+                MOV l[DS+64], 1
+                MOV EAX, DS
+                ADD EAX, 80
                 MOV l[DS+68], EAX
 
                 ; ---------------------------------------------------------
-                ; 2. Construir Arbol 2 (quedara vacio -> se elimina de la lista)
-                ; T2_1 (offset 208): val = 4, hijos = NULL
-                ; C2_1 (offset 224): arbol = T2_1, sig = NULL
-                ; T2   (offset 192): val = 4, hijos = C2_1
+                ; 2. Construir Arbol 2 (Raiz 5 en DS+180)
+                ; N2_1   (offset 212): val = 2, hijos = NULL
+                ; N2_2_1 (offset 244): val = 1, hijos = NULL
+                ; C2_2_1 (offset 236): arbol = N2_2_1, sig = NULL
+                ; N2_2   (offset 220): val = 4, hijos = C2_2_1 (Elimina 4 #2)
+                ; C2_2   (offset 204): arbol = N2_2, sig = NULL
+                ; C2_1   (offset 196): arbol = N2_1, sig = C2_2
+                ; N2     (offset 180): val = 5, hijos = C2_1
                 ; ---------------------------------------------------------
 
-                ; T2_1: val = 4, hijos = NULL
-                MOV l[DS+208], 4
-                MOV l[DS+212], -1
+                ; N2_1: val = 2, hijos = NULL
+                MOV l[DS+212], 2
+                MOV l[DS+216], -1
 
-                ; C2_1: arbol = T2_1, sig = NULL
+                ; N2_2_1: val = 1, hijos = NULL
+                MOV l[DS+244], 1
+                MOV l[DS+248], -1
+
+                ; C2_2_1: arbol = N2_2_1, sig = NULL
                 MOV EAX, DS
-                ADD EAX, 208
+                ADD EAX, 244
+                MOV l[DS+236], EAX
+                MOV l[DS+240], -1
+
+                ; N2_2: val = 4, hijos = C2_2_1
+                MOV l[DS+220], 4
+                MOV EAX, DS
+                ADD EAX, 236
                 MOV l[DS+224], EAX
-                MOV l[DS+228], -1
 
-                ; T2 (Raiz Arbol 2): val = 4, hijos = C2_1
-                MOV l[DS+192], 4
+                ; C2_2: arbol = N2_2, sig = NULL
                 MOV EAX, DS
-                ADD EAX, 224
+                ADD EAX, 220
+                MOV l[DS+204], EAX
+                MOV l[DS+208], -1
+
+                ; C2_1: arbol = N2_1, sig = C2_2
+                MOV EAX, DS
+                ADD EAX, 212
                 MOV l[DS+196], EAX
-
-                ; ---------------------------------------------------------
-                ; 3. Construir Arbol 3
-                ; T3_1_1 (offset 288): val = 50, hijos = NULL
-                ; C3_1_1 (offset 304): arbol = T3_1_1, sig = NULL
-                ; T3_1   (offset 272): val = 4,  hijos = C3_1_1 (offset 304)
-                ; C3_1   (offset 256): arbol = T3_1, sig = NULL
-                ; T3     (offset 240): val = 30, hijos = C3_1 (offset 256)
-                ; ---------------------------------------------------------
-
-                ; T3_1_1: val = 50, hijos = NULL
-                MOV l[DS+288], 50
-                MOV l[DS+292], -1
-
-                ; C3_1_1: arbol = T3_1_1, sig = NULL
                 MOV EAX, DS
-                ADD EAX, 288
-                MOV l[DS+304], EAX
-                MOV l[DS+308], -1
+                ADD EAX, 204
+                MOV l[DS+200], EAX
 
-                ; T3_1: val = 4, hijos = C3_1_1
-                MOV l[DS+272], 4
+                ; N2: val = 5, hijos = C2_1
+                MOV l[DS+180], 5
+                MOV EAX, DS
+                ADD EAX, 196
+                MOV l[DS+184], EAX
+
+                ; ---------------------------------------------------------
+                ; 3. Construir Arbol 3 (Raiz 4 en DS+260, sin hijos)
+                ; N3 (offset 260): val = 4, hijos = NULL (Elimina 4 #3)
+                ; ---------------------------------------------------------
+                MOV l[DS+260], 4
+                MOV l[DS+264], -1
+
+                ; ---------------------------------------------------------
+                ; 4. Construir Arbol 4 (Raiz 2 en DS+280)
+                ; N4_1   (offset 320): val = 2, hijos = NULL
+                ; N4_2_1 (offset 368): val = 1, hijos = NULL
+                ; N4_2_2 (offset 376): val = 6, hijos = NULL
+                ; N4_2_3 (offset 384): val = 7, hijos = NULL
+                ; C4_2_3 (offset 360): arbol = N4_2_3, sig = NULL
+                ; C4_2_2 (offset 352): arbol = N4_2_2, sig = C4_2_3
+                ; C4_2_1 (offset 344): arbol = N4_2_1, sig = C4_2_2
+                ; N4_2   (offset 328): val = 4, hijos = C4_2_1 (Elimina 4 #4)
+                ; N4_3   (offset 392): val = 4, hijos = NULL   (Elimina 4 #5)
+                ; C4_3   (offset 312): arbol = N4_3, sig = NULL
+                ; C4_2   (offset 304): arbol = N4_2, sig = C4_3
+                ; C4_1   (offset 296): arbol = N4_1, sig = C4_2
+                ; N4     (offset 280): val = 2, hijos = C4_1
+                ; ---------------------------------------------------------
+
+                ; N4_1: val = 2, hijos = NULL
+                MOV l[DS+320], 2
+                MOV l[DS+324], -1
+
+                ; N4_2_1: val = 1, hijos = NULL
+                MOV l[DS+368], 1
+                MOV l[DS+372], -1
+
+                ; N4_2_2: val = 6, hijos = NULL
+                MOV l[DS+376], 6
+                MOV l[DS+380], -1
+
+                ; N4_2_3: val = 7, hijos = NULL
+                MOV l[DS+384], 7
+                MOV l[DS+388], -1
+
+                ; C4_2_3: arbol = N4_2_3, sig = NULL
+                MOV EAX, DS
+                ADD EAX, 384
+                MOV l[DS+360], EAX
+                MOV l[DS+364], -1
+
+                ; C4_2_2: arbol = N4_2_2, sig = C4_2_3
+                MOV EAX, DS
+                ADD EAX, 376
+                MOV l[DS+352], EAX
+                MOV EAX, DS
+                ADD EAX, 360
+                MOV l[DS+356], EAX
+
+                ; C4_2_1: arbol = N4_2_1, sig = C4_2_2
+                MOV EAX, DS
+                ADD EAX, 368
+                MOV l[DS+344], EAX
+                MOV EAX, DS
+                ADD EAX, 352
+                MOV l[DS+348], EAX
+
+                ; N4_2: val = 4, hijos = C4_2_1
+                MOV l[DS+328], 4
+                MOV EAX, DS
+                ADD EAX, 344
+                MOV l[DS+332], EAX
+
+                ; N4_3: val = 4, hijos = NULL
+                MOV l[DS+392], 4
+                MOV l[DS+396], -1
+
+                ; C4_3: arbol = N4_3, sig = NULL
+                MOV EAX, DS
+                ADD EAX, 392
+                MOV l[DS+312], EAX
+                MOV l[DS+316], -1
+
+                ; C4_2: arbol = N4_2, sig = C4_3
+                MOV EAX, DS
+                ADD EAX, 328
+                MOV l[DS+304], EAX
+                MOV EAX, DS
+                ADD EAX, 312
+                MOV l[DS+308], EAX
+
+                ; C4_1: arbol = N4_1, sig = C4_2
+                MOV EAX, DS
+                ADD EAX, 320
+                MOV l[DS+296], EAX
                 MOV EAX, DS
                 ADD EAX, 304
-                MOV l[DS+276], EAX
+                MOV l[DS+300], EAX
 
-                ; C3_1: arbol = T3_1, sig = NULL
+                ; N4: val = 2, hijos = C4_1
+                MOV l[DS+280], 2
                 MOV EAX, DS
-                ADD EAX, 272
-                MOV l[DS+256], EAX
-                MOV l[DS+260], -1
-
-                ; T3 (Raiz Arbol 3): val = 30, hijos = C3_1
-                MOV l[DS+240], 30
-                MOV EAX, DS
-                ADD EAX, 256
-                MOV l[DS+244], EAX
+                ADD EAX, 296
+                MOV l[DS+284], EAX
 
                 ; ---------------------------------------------------------
-                ; 4. Construir Lista Enlazada Principal (L1 -> L2 -> L3 -> NULL)
-                ; L1 en offset 16: arbol = T1 (offset 64),  sig = L2 (offset 32)
-                ; L2 en offset 32: arbol = T2 (offset 192), sig = L3 (offset 48)
-                ; L3 en offset 48: arbol = T3 (offset 240), sig = NULL
-                ; lista_ptr en offset 0: apunta a L1
+                ; 5. Construir Lista Enlazada Principal (L1 -> L2 -> L3 -> L4 -> NULL)
+                ; L4 (offset 40): arbol = N4 (offset 280), sig = NULL
+                ; L3 (offset 32): arbol = N3 (offset 260), sig = L4 (offset 40)
+                ; L2 (offset 24): arbol = N2 (offset 180), sig = L3 (offset 32)
+                ; L1 (offset 16): arbol = N1 (offset 64),  sig = L2 (offset 24)
+                ; lista_ptr (offset 0): apunta a L1 (offset 16)
                 ; ---------------------------------------------------------
 
-                ; L3: arbol = T3, sig = NULL
+                ; L4: arbol = N4, sig = NULL
                 MOV EAX, DS
-                ADD EAX, 240
-                MOV l[DS+48], EAX
-                MOV l[DS+52], -1
+                ADD EAX, 280
+                MOV l[DS+40], EAX
+                MOV l[DS+44], -1
 
-                ; L2: arbol = T2, sig = L3
+                ; L3: arbol = N3, sig = L4
                 MOV EAX, DS
-                ADD EAX, 192
+                ADD EAX, 260
                 MOV l[DS+32], EAX
                 MOV EAX, DS
-                ADD EAX, 48
+                ADD EAX, 40
                 MOV l[DS+36], EAX
 
-                ; L1: arbol = T1, sig = L2
+                ; L2: arbol = N2, sig = L3
+                MOV EAX, DS
+                ADD EAX, 180
+                MOV l[DS+24], EAX
+                MOV EAX, DS
+                ADD EAX, 32
+                MOV l[DS+28], EAX
+
+                ; L1: arbol = N1, sig = L2
                 MOV EAX, DS
                 ADD EAX, 64
                 MOV l[DS+16], EAX
                 MOV EAX, DS
-                ADD EAX, 32
+                ADD EAX, 24
                 MOV l[DS+20], EAX
 
-                ; lista_ptr (offset 0): puntero a L1
+                ; lista_ptr (offset 0): puntero doble a L1
                 MOV EAX, DS
                 ADD EAX, 16
                 MOV l[DS+0], EAX
 
                 ; ---------------------------------------------------------
-                ; 5. Invocar elim_valor(LISTA**, VALOR)
+                ; 6. Invocar elim_valor(LISTA**, VALOR)
                 ; PUSH 4        (VALOR)
                 ; PUSH LISTA**  (&lista_ptr en DS+0)
                 ; CALL elim_valor

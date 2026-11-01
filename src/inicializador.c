@@ -9,7 +9,6 @@
 #include <stdint.h>
 #include <string.h>
 
-
 /*
     Tareas del inicializador:
     -Lee el archivo en binario
@@ -177,7 +176,7 @@ void cargar_programa(Vmx *vmx, char ruta_archivo[], int tam_parametros) {
         logger("[CARGA] Registros iniciales: CS=0x%08X, DS=0x%08X, IP=0x%08X\n",
                vmx->registros[CS], vmx->registros[DS], vmx->registros[IP]);
     } else {
-        // Cabecera Version 2: 18 bytes totales (6 campos de 2 bytes big-endian)
+        // Cabecera Version 2: 18 bytes totales
         int tam_codigo = 0;
         int tam_datos = 0;
         int tam_extra = 0;

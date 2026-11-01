@@ -268,6 +268,19 @@ void crear_segmentos(Memoria *mem, int tam_par, int tam_const, int tam_code, int
         }
     }
 
+    // Las entradas no utilizadas de la tabla quedan libres (0xFFFFFFFF)
+    while (entrada_tabla < TAM_SEGMENTOS) {
+        mem->tabla_segmentos[entrada_tabla] = 0xFFFFFFFF;
+        entrada_tabla++;
+    }
+
+    // Valida que el proceso entre en la memoria fisica disponible
+    if (posFisicaActual > mem->tam_mem_kib * 1024) {
+        logger("[ERROR][MEMORIA] Memoria insuficiente para alojar proceso (%d bytes requeridos > %d disponibles)\n",
+               posFisicaActual, mem->tam_mem_kib * 1024);
+        abortar("Error: Memoria insuficiente.");
+    }
+
     // Registro SP: apunta a SS + tamano de la pila
     if (tam_stack > 0 && mem->registros[SS] != 0xFFFFFFFF) {
         int seg_ss = (mem->registros[SS] >> 16) & 0xFFFF;
